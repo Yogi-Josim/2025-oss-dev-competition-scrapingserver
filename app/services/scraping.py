@@ -3,9 +3,6 @@ from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 import requests
 from bs4 import BeautifulSoup
 from app.core.config import settings
@@ -52,27 +49,18 @@ def run_dcinside_scraper(crawl_hours: int):
   time_cutoff = datetime.now() - timedelta(hours=crawl_hours)
 
   options = webdriver.ChromeOptions()
-  options.add_argument('--headless')
+  options.add_argument('--headless=new')
   options.add_argument('--no-sandbox')
   options.add_argument('--disable-dev-shm-usage')
   options.add_argument('--disable-gpu')
-  options.add_argument(
-    "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-  options.add_experimental_option("prefs", {
-    "profile.managed_default_content_settings.images": 2})
-
-  options.binary_location = "/usr/bin/chromium"
-
-  service = Service(executable_path="/usr/bin/chromedriver")
 
   print("[DEBUG] Selenium WebDriver를 생성합니다...")
-  driver = webdriver.Chrome(service=service, options=options)
-  print("[DEBUG] WebDriver 생성 완료. 스크래핑을 시작합니다.")
+  driver = webdriver.Chrome(options=options)
+  print("[DEBUG] WebDriver 생성 완료.")
 
   final_results = []
   try:
-    # ★★★ 페이지 로드 최대 대기 시간 설정 (드라이버 생성 후)
-    driver.set_page_load_timeout(20)
+    driver.set_page_load_timeout(30)
 
     for gallery in settings.GALLERIES_TO_SCRAPE:
       gallery_id, gallery_name = gallery["id"], gallery["name"]
@@ -87,7 +75,7 @@ def run_dcinside_scraper(crawl_hours: int):
 
       for link in post_links:
         try:
-          print(f"[DEBUG] 게시물 접속 시도 (최대 20초): {link}")
+          print(f"[DEBUG] 게시물 접속 시도 (최대 30초): {link}")
           driver.get(link)
           print(f"[DEBUG] 페이지 로딩 완료: {link}")
         except TimeoutException:
