@@ -1,0 +1,10 @@
+# scraper-api-repo/docker-compose.yml
+
+services:
+  scraper-api:
+    image: holypigeon/yogi-josim-fastapi-scraper:latest
+    container_name: scraper-api
+    ports:
+      - "8001:8000"
+    shm_size: '2gb'
+    restart: always
