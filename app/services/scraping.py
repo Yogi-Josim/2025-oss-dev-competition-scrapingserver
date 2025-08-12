@@ -1,6 +1,7 @@
 import time
 from datetime import datetime, timedelta
 from selenium import webdriver
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
@@ -54,13 +55,16 @@ def run_dcinside_scraper(crawl_hours: int):
   options.add_argument('--headless')
   options.add_argument('--no-sandbox')
   options.add_argument('--disable-dev-shm-usage')
-  options.add_argument('--log-level=3')
-  options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-  options.add_experimental_option("prefs", {"profile.managed_default_content_settings.images": 2})
   options.add_argument('--disable-gpu')
+  options.add_argument(
+    "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+  options.add_experimental_option("prefs", {
+    "profile.managed_default_content_settings.images": 2})
 
   service = Service(executable_path="/usr/bin/chromedriver")
   driver = webdriver.Chrome(service=service, options=options)
+
+  driver.set_page_load_timeout(20)
 
   final_results = []
   try:
@@ -76,12 +80,16 @@ def run_dcinside_scraper(crawl_hours: int):
                     (tag := row.select_one(settings.POST_LINK_SELECTOR))]
 
       for link in post_links:
-        driver.get(link)
         try:
-          WebDriverWait(driver, 3).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".gall_tit_box")))
-        except:
-          pass
+          print(f"[DEBUG] 게시물 접속 시도 (최대 20초): {link}")
+          driver.get(link)
+          print(f"[DEBUG] 페이지 로딩 완료: {link}")
+        except TimeoutException:
+          print(f"  [경고] 페이지 로딩 시간 초과: {link}")
+          continue
+        except Exception as e:
+          print(f"  [경고] 페이지 로딩 중 알 수 없는 오류: {link}, 에러: {e}")
+          continue
 
         result = _scrape_details(driver, time_cutoff, f"dcinside_{gallery_id}")
         if result == "STOP":
