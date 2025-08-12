@@ -5,6 +5,6 @@ services:
     image: ${DOCKER_USERNAME}/yogi-josim-fastapi-scraper:latest
     container_name: scraper-api
     ports:
-      - "${SERVER_API_PORT}:8000"
+      - "8081:8000"
     shm_size: '2gb'
     restart: always
