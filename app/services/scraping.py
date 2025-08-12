@@ -61,13 +61,19 @@ def run_dcinside_scraper(crawl_hours: int):
   options.add_experimental_option("prefs", {
     "profile.managed_default_content_settings.images": 2})
 
-  service = Service(executable_path="/usr/bin/chromedriver")
-  driver = webdriver.Chrome(service=service, options=options)
+  options.binary_location = "/usr/bin/chromium"
 
-  driver.set_page_load_timeout(20)
+  service = Service(executable_path="/usr/bin/chromedriver")
+
+  print("[DEBUG] Selenium WebDriver를 생성합니다...")
+  driver = webdriver.Chrome(service=service, options=options)
+  print("[DEBUG] WebDriver 생성 완료. 스크래핑을 시작합니다.")
 
   final_results = []
   try:
+    # ★★★ 페이지 로드 최대 대기 시간 설정 (드라이버 생성 후)
+    driver.set_page_load_timeout(20)
+
     for gallery in settings.GALLERIES_TO_SCRAPE:
       gallery_id, gallery_name = gallery["id"], gallery["name"]
       list_url = f"{settings.BASE_URL}/board/lists/?id={gallery_id}&exception_mode=recommend"
@@ -98,6 +104,7 @@ def run_dcinside_scraper(crawl_hours: int):
           final_results.append(result)
 
   finally:
+    print("[DEBUG] 스크래핑 루프 종료. WebDriver를 닫습니다.")
     driver.quit()
 
   return final_results
