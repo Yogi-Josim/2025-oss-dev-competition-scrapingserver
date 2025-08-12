@@ -1,17 +1,17 @@
 FROM python:3.10-bullseye
 
-ARG TARGETARCH
+RUN apt-get update && apt-get install -y \
+    libglib2.0-0 libnss3 libgconf-2-4 libfontconfig1 \
+    libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 \
+    libxext6 libxfixes3 libxrandr2 libgbm1 libgtk-3-0 libasound2 \
+    wget gnupg ca-certificates \
+    --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && apt-get install -y wget gnupg ca-certificates --no-install-recommends \
-    && if [ "$TARGETARCH" = "amd64" ]; then \
-        echo "Installing Google Chrome for amd64"; \
-        wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome-keyring.gpg; \
-        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list; \
-        apt-get update && apt-get install -y google-chrome-stable --no-install-recommends; \
-    elif [ "$TARGETARCH" = "arm64" ]; then \
-        echo "Installing Chromium and Chromium-driver for arm64"; \
-        apt-get update && apt-get install -y chromium chromium-driver --no-install-recommends; \
-    fi \
+RUN apt-get update && apt-get install -y \
+    chromium \
+    chromium-driver \
+    --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -23,4 +23,4 @@ COPY ./app /app/app
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:run_app", "--host", "0.0.0.0", "--port", "8000"]
