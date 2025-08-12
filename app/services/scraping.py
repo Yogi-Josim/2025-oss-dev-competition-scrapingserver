@@ -62,7 +62,7 @@ def run_dcinside_scraper(crawl_hours: int):
   options.add_experimental_option("prefs", {"profile.managed_default_content_settings.images": 2})
   options.add_argument('--disable-gpu')
 
-  service = Service()
+  service = Service(ChromeDriverManager().install())
   driver = webdriver.Chrome(service=service, options=options)
 
   final_results = []
