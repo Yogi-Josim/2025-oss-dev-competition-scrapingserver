@@ -19,6 +19,9 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: QEMU 설정
+        uses: docker/setup-qemu-action@v3
+
       - name: Docker Buildx 설정
         uses: docker/setup-buildx-action@v3
 
@@ -28,6 +31,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
+          platforms: linux/amd64, linux/arm64
           tags: ${{ secrets.DOCKER_USERNAME }}/yogi-josim-fastapi-scraper:latest
 
   deploy:
