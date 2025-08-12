@@ -1,40 +1,76 @@
-# scraper-api-repo/.github/workflows/docker-build-push.yml
+name: Deploy
 
-name: Build and Push Scraper API to Docker Hub
-
-# 1. 트리거 설정: main 브랜치에 push 이벤트가 발생할 때 실행
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch: # GitHub Actions 탭에서 수동으로 실행 가능
+  workflow_dispatch:
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest # 실행 환경 지정
-
+  build:
+    runs-on: ubuntu-latest
+    
     steps:
-      # 2. 소스 코드 체크아웃
-      - name: Checkout repository
+      - name: Github Repository 체크아웃
         uses: actions/checkout@v4
 
-      # 3. Docker Hub 로그인 (GitHub Secrets 사용)
-      - name: Log in to Docker Hub
+      - name: Docker Hub 로그인
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # 4. Docker Buildx 설정 (최신 빌드 기능 사용)
-      - name: Set up Docker Buildx
+      - name: Docker Buildx 설정
         uses: docker/setup-buildx-action@v3
 
-      # 5. Docker 이미지 빌드 및 Docker Hub에 푸시
-      - name: Build and push Docker image
+      - name: Docker Hub 이미지 빌드 및 푸시
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
-          push: true # true로 설정해야 푸시됨
-          tags: | # 이미지 태그 설정
-            ${{ secrets.DOCKER_USERNAME }}/yogi-josim-fastapi-scraper:latest
-            ${{ secrets.DOCKER_USERNAME }}/yogi-josim-fastapi-scraper:${{ github.sha }}
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/yogi-josim-fastapi-scraper:latest
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "레포지토리 체크아웃"
+        uses: actions/checkout@v4
+      
+      - name: "docker-compose-scraper.yml SCP 전송"
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: ${{ secrets.SERVER_SSH_PORT }}
+          source: "./docker-compose-scraper.yml"
+          target: "~/docker/"
+          
+      # 서버에 접속하여 컨테이너 재시작
+      - name: "애플리케이션 서버 구동"
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: ${{ secrets.SERVER_SSH_PORT }}
+          script: |
+            set -e
+            cd ~/docker/
+            docker pull ${{ secrets.DOCKER_USERNAME }}/yogi-josim-fastapi-scraper:latest
+            docker-compose -f docker-compose-scraper.yml up -d
+            docker image prune -af
+
+  check:
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "애플리케이션 서버 정상 동작 여부 점검"
+        uses: jtalk/url-health-check-action@v4
+        with:
+          url: http://${{ secrets.SERVER_HOST }}:${{ secrets.SERVER_API_PORT }}
+          max-attempts: 5
+          retry-delay: 10s
