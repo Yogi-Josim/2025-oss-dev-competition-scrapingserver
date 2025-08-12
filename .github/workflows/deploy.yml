@@ -25,6 +25,14 @@ jobs:
       - name: Docker Buildx 설정
         uses: docker/setup-buildx-action@v3
 
+      - name: Docker Layer Cache 설정
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
       - name: Docker Hub 이미지 빌드 및 푸시
         uses: docker/build-push-action@v5
         with:
