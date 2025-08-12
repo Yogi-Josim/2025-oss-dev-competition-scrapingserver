@@ -1,5 +1,3 @@
-# scraper-api-repo/app/services/scraping.py
-
 import time
 from datetime import datetime, timedelta
 from selenium import webdriver

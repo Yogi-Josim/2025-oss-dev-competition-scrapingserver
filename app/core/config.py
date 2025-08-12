@@ -1,5 +1,3 @@
-# scraper-api-repo/app/core/config.py
-
 from pydantic import BaseModel
 from typing import List, Dict
 

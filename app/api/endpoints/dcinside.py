@@ -1,5 +1,3 @@
-# scraper-api-repo/app/api/endpoints/dcinside.py
-
 from fastapi import APIRouter
 from app.services.scraping import run_dcinside_scraper
 

@@ -1,5 +1,3 @@
-# scraper-api-repo/app/main.py
-
 from fastapi import FastAPI
 from app.api.endpoints import dcinside
 
