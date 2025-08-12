@@ -1,4 +1,4 @@
-# scraper-api-repo/docker-compose.yml
+# scraper-api-repo/docker-compose-scraper.yml
 
 services:
   scraper-api:
