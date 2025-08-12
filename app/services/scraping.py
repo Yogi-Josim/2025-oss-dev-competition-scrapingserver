@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import requests
@@ -60,7 +59,7 @@ def run_dcinside_scraper(crawl_hours: int):
   options.add_experimental_option("prefs", {"profile.managed_default_content_settings.images": 2})
   options.add_argument('--disable-gpu')
 
-  service = Service(ChromeDriverManager().install())
+  service = Service(executable_path="/usr/bin/chromedriver")
   driver = webdriver.Chrome(service=service, options=options)
 
   final_results = []

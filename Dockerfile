@@ -9,8 +9,8 @@ RUN apt-get update && apt-get install -y wget gnupg ca-certificates --no-install
         echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list; \
         apt-get update && apt-get install -y google-chrome-stable --no-install-recommends; \
     elif [ "$TARGETARCH" = "arm64" ]; then \
-        echo "Installing Chromium for arm64"; \
-        apt-get update && apt-get install -y chromium --no-install-recommends; \
+        echo "Installing Chromium and Chromium-driver for arm64"; \
+        apt-get update && apt-get install -y chromium chromium-driver --no-install-recommends; \
     fi \
     && rm -rf /var/lib/apt/lists/*
 
@@ -22,4 +22,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY ./app /app/app
 
 EXPOSE 8000
+
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
