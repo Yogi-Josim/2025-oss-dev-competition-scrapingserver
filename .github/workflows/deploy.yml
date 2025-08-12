@@ -64,7 +64,7 @@ jobs:
             set -e
             cd ~/docker/
             docker pull ${{ secrets.DOCKER_USERNAME }}/yogi-josim-fastapi-scraper:latest
-            docker-compose -f docker-compose-scraper.yml up -d
+            docker compose -f docker-compose-scraper.yml up -d
             docker image prune -af
 
   check:
