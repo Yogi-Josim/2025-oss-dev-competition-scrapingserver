@@ -1,9 +1,7 @@
-# scraper-api-repo/requirements.txt
-
 fastapi
 uvicorn[standard]
 selenium
 webdriver-manager
 requests
 beautifulsoup4
-python-dotenv  # .env 파일을 읽기 위해 추가
+python-dotenv
