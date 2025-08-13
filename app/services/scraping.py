@@ -54,11 +54,14 @@ def run_dcinside_scraper(crawl_hours: int):
   options.add_argument('--disable-dev-shm-usage')
   options.add_argument('--disable-gpu')
 
-  options.binary_location = "/usr/bin/chromium"
+  SELENIUM_GRID_URL = "http://localhost:4444/wd/hub"
 
-  print("[DEBUG] Selenium WebDriver를 생성합니다...")
-  driver = webdriver.Chrome(options=options)
-  print("[DEBUG] WebDriver 생성 완료.")
+  print("Selenium Grid에 연결을 시도합니다...")
+  driver = webdriver.Remote(
+      command_executor=SELENIUM_GRID_URL,
+      options=options
+  )
+  print("WebDriver 생성 완료.")
 
   final_results = []
   try:
@@ -95,6 +98,7 @@ def run_dcinside_scraper(crawl_hours: int):
 
   finally:
     print("[DEBUG] 스크래핑 루프 종료. WebDriver를 닫습니다.")
-    driver.quit()
+    if driver:
+      driver.quit()
 
   return final_results
