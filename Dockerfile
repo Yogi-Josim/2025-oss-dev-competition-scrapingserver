@@ -1,5 +1,7 @@
 FROM seleniarm/standalone-chromium:124.0-chromedriver-124.0
 
+RUN apt-get update && apt-get install -y python3 python3-pip
+
 WORKDIR /app
 
 COPY requirements.txt .
