@@ -1,9 +1,4 @@
-FROM python:3.10-bullseye
-
-RUN apt-get update && apt-get install -y \
-    chromium \
-    --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+FROM seleniarm/standalone-chromium:124.0-chromedriver-124.0
 
 WORKDIR /app
 
