@@ -54,6 +54,8 @@ def run_dcinside_scraper(crawl_hours: int):
   options.add_argument('--disable-dev-shm-usage')
   options.add_argument('--disable-gpu')
 
+  options.binary_location = "/usr/bin/chromium"
+
   print("[DEBUG] Selenium WebDriver를 생성합니다...")
   driver = webdriver.Chrome(options=options)
   print("[DEBUG] WebDriver 생성 완료.")
