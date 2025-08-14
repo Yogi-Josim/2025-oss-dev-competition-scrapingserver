@@ -4,6 +4,7 @@ from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 import requests
 from bs4 import BeautifulSoup
 from app.core.config import settings
@@ -53,7 +54,8 @@ def run_dcinside_scraper(crawl_hours: int):
   options.add_argument('--disable-dev-shm-usage')
   options.add_argument('--disable-gpu')
 
-  service = Service(executable_path="/usr/bin/chromedriver")
+  print("[DEBUG] Setting up WebDriver using webdriver-manager...")
+  service = Service(ChromeDriverManager().install())
 
   print("[DEBUG] Selenium WebDriver를 생성합니다...")
   driver = webdriver.Chrome(service=service, options=options)
