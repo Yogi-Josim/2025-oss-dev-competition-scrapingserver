@@ -1,11 +1,11 @@
 FROM python:3.10-bullseye
 
-# 기본 의존성 패키지 설치 (wget, unzip 포함)
+# 기본 의존성 패키지 설치 (wget, unzip, jq 포함)
 RUN apt-get update && apt-get install -y \
     libglib2.0-0 libnss3 libgconf-2-4 libfontconfig1 \
     libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 \
     libxext6 libxfixes3 libxrandr2 libgbm1 libgtk-3-0 libasound2 \
-    wget unzip \
+    wget unzip jq \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
@@ -19,29 +19,30 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Chromedriver 설치 (모든 아키텍처에서 직접 다운로드)
-# [수정] 네트워크 불안정성에 대비해 자동 재시도 로직을 추가하여 안정성을 대폭 향상시켰습니다.
+# [수정] 안정적인 JSON 엔드포인트와 jq 파서를 사용하여 다운로드 안정성을 대폭 향상시켰습니다.
 RUN set -ex; \
     \
-    # 아키텍처에 따라 변수 설정
+    # 아키텍처에 따라 플랫폼 변수 설정
     if [ "$TARGETARCH" = "amd64" ]; then \
-        DRIVER_ARCH="linux64"; \
+        DRIVER_PLATFORM="linux64"; \
     elif [ "$TARGETARCH" = "arm64" ]; then \
-        DRIVER_ARCH="linux-arm64"; \
+        DRIVER_PLATFORM="linux-arm64"; \
     else \
         echo "Unsupported architecture: $TARGETARCH" >&2; \
         exit 1; \
     fi; \
     \
-    # 최신 드라이버 버전 확인 (5회 재시도)
+    # JSON 엔드포인트에서 다운로드 URL 확인 (5회 재시도)
     for i in $(seq 1 5); do \
-        LATEST_VERSION=$(wget -q -O - --no-check-certificate https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE) && [ -n "$LATEST_VERSION" ] && break; \
-        echo "Failed to get latest version, retrying in 5s... (${i}/5)"; \
+        JSON_DATA=$(wget -q -O - --no-check-certificate https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json); \
+        DOWNLOAD_URL=$(echo "$JSON_DATA" | jq -r --arg plat "$DRIVER_PLATFORM" '.versions[-1].downloads.chromedriver[] | select(.platform==$plat).url'); \
+        [ -n "$DOWNLOAD_URL" ] && [ "$DOWNLOAD_URL" != "null" ] && break; \
+        echo "Failed to get download URL, retrying in 5s... (${i}/5)"; \
         sleep 5; \
     done; \
-    if [ -z "$LATEST_VERSION" ]; then echo "Could not get latest version after 5 retries." >&2; exit 1; fi; \
+    if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then echo "Could not get download URL after 5 retries." >&2; exit 1; fi; \
     \
-    DOWNLOAD_URL="https://storage.googleapis.com/chrome-for-testing-public/${LATEST_VERSION}/${DRIVER_ARCH}/chromedriver-${DRIVER_ARCH}.zip"; \
-    echo "Downloading ChromeDriver v${LATEST_VERSION} for ${TARGETARCH} from ${DOWNLOAD_URL}..."; \
+    echo "Downloading ChromeDriver for ${TARGETARCH} from ${DOWNLOAD_URL}..."; \
     \
     # 드라이버 다운로드 (5회 재시도)
     for i in $(seq 1 5); do \
@@ -53,7 +54,7 @@ RUN set -ex; \
     \
     # 압축 해제 및 설치
     unzip -q /tmp/chromedriver.zip -d /tmp; \
-    mv "/tmp/chromedriver-${DRIVER_ARCH}/chromedriver" /usr/bin/chromedriver; \
+    mv /tmp/chromedriver-*/chromedriver /usr/bin/chromedriver; \
     chmod +x /usr/bin/chromedriver; \
     rm -rf /tmp/*; \
     echo "ChromeDriver installed successfully.";
