@@ -18,30 +18,27 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# 3단계: 빌드 아키텍처에 맞는 Chromedriver 다운로드 및 설치 (별도 레이어)
-RUN CHROME_DRIVER_VERSION=$(wget -q -O - https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE) \
-    && echo "Latest Stable ChromeDriver version: $CHROME_DRIVER_VERSION for architecture: $TARGETARCH" \
-    # TARGETARCH 변수 값에 따라 다운로드 URL과 파일명을 동적으로 결정
-    && if [ "$TARGETARCH" = "amd64" ]; then \
-        DRIVER_URL="https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_DRIVER_VERSION}/linux64/chromedriver-linux64.zip"; \
-        ZIP_FILE="chromedriver-linux64.zip"; \
-        INNER_DIR="chromedriver-linux64"; \
-       elif [ "$TARGETARCH" = "arm64" ]; then \
+# 3단계: 빌드 아키텍처에 따라 다른 방식으로 Chromedriver 설치
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+        echo "Installing chromium-driver for amd64 via apt-get..."; \
+        apt-get update && apt-get install -y chromium-driver --no-install-recommends && rm -rf /var/lib/apt/lists/*; \
+    elif [ "$TARGETARCH" = "arm64" ]; then \
+        echo "Downloading and installing chromedriver for arm64 manually..."; \
+        CHROME_DRIVER_VERSION=$(wget -q -O - https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE); \
+        echo "Latest Stable ChromeDriver version: $CHROME_DRIVER_VERSION for architecture: $TARGETARCH"; \
         DRIVER_URL="https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_DRIVER_VERSION}/linux-arm64/chromedriver-linux-arm64.zip"; \
         ZIP_FILE="chromedriver-linux-arm64.zip"; \
         INNER_DIR="chromedriver-linux-arm64"; \
-       else \
+        wget -q "$DRIVER_URL" -P /tmp; \
+        unzip "/tmp/$ZIP_FILE" -d /tmp; \
+        mv "/tmp/$INNER_DIR/chromedriver" /usr/bin/chromedriver; \
+        chmod +x /usr/bin/chromedriver; \
+        rm "/tmp/$ZIP_FILE"; \
+        rm -rf "/tmp/$INNER_DIR"; \
+    else \
         echo "Unsupported architecture: $TARGETARCH"; \
         exit 1; \
-       fi \
-    # 결정된 URL로 다운로드 및 설치
-    && wget -q "$DRIVER_URL" -P /tmp \
-    && unzip "/tmp/$ZIP_FILE" -d /tmp \
-    && mv "/tmp/$INNER_DIR/chromedriver" /usr/bin/chromedriver \
-    && chmod +x /usr/bin/chromedriver \
-    # 임시 파일 삭제
-    && rm "/tmp/$ZIP_FILE" \
-    && rm -rf "/tmp/$INNER_DIR"
+    fi
 
 WORKDIR /app
 
