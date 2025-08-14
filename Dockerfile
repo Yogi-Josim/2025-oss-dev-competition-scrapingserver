@@ -24,8 +24,15 @@ RUN set -ex; \
     # 안정성이 검증된 특정 버전을 하드코딩합니다.
     CHROME_DRIVER_VERSION="126.0.6478.126"; \
     \
-    # [수정] amd64와 arm64 모두 'linux64' 플랫폼을 사용합니다. 이것이 핵심적인 수정 사항입니다.
-    DRIVER_PLATFORM="linux64"; \
+    # [수정] 각 아키텍처에 맞는 올바른 플랫폼 이름을 사용하도록 되돌립니다.
+    if [ "$TARGETARCH" = "amd64" ]; then \
+        DRIVER_PLATFORM="linux64"; \
+    elif [ "$TARGETARCH" = "arm64" ]; then \
+        DRIVER_PLATFORM="linux-arm64"; \
+    else \
+        echo "Unsupported architecture: $TARGETARCH" >&2; \
+        exit 1; \
+    fi; \
     \
     DOWNLOAD_URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROME_DRIVER_VERSION}/${DRIVER_PLATFORM}/chromedriver-${DRIVER_PLATFORM}.zip"; \
     echo "Downloading ChromeDriver v${CHROME_DRIVER_VERSION} for ${TARGETARCH} (using ${DRIVER_PLATFORM} package)..."; \
