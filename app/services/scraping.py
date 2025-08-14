@@ -1,33 +1,12 @@
 import time
 from datetime import datetime, timedelta
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException, NoSuchDriverException
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 import requests
 from bs4 import BeautifulSoup
 from app.core.config import settings
-import shutil  # <--- shutil 임포트 추가
-
-
-def _get_chromedriver_path():
-  path = shutil.which("chromedriver")
-  if path:
-    print(f"[DEBUG] Found chromedriver in PATH: {path}")
-    return path
-
-  common_paths = [
-    "/usr/bin/chromedriver",
-    "/usr/lib/chromium/chromedriver",
-    "/usr/lib/chromium-driver/chromedriver",
-  ]
-  for p in common_paths:
-    if shutil.which(p):
-      print(f"[DEBUG] Found chromedriver at: {p}")
-      return p
-
-  print("[ERROR] Could not find chromedriver in any known paths.")
-  return None
 
 
 def _parse_time(time_str: str) -> datetime:
@@ -74,12 +53,7 @@ def run_dcinside_scraper(crawl_hours: int):
   options.add_argument('--disable-dev-shm-usage')
   options.add_argument('--disable-gpu')
 
-  chromedriver_path = _get_chromedriver_path()
-  if not chromedriver_path:
-    raise NoSuchDriverException(
-      "Chromedriver를 찾을 수 없습니다. Dockerfile 설정을 확인하세요.")
-
-  service = Service(executable_path=chromedriver_path)
+  service = Service(executable_path="/usr/bin/chromedriver")
 
   print("[DEBUG] Selenium WebDriver를 생성합니다...")
   driver = webdriver.Chrome(service=service, options=options)
