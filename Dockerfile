@@ -3,7 +3,8 @@
 # =================================================================
 
 # --- AMD64용 드라이버 다운로더 ---
-FROM --platform=linux/amd64 debian:bullseye-slim as chromedriver-amd64
+# [수정] 스테이지 이름을 'amd64'로 단순화
+FROM --platform=linux/amd64 debian:bullseye-slim as amd64
 RUN apt-get update && apt-get install -y wget unzip --no-install-recommends && rm -rf /var/lib/apt/lists/*
 RUN CHROME_DRIVER_VERSION=$(wget -q -O - https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE) && \
     wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_DRIVER_VERSION}/linux64/chromedriver-linux64.zip" -O /tmp/chromedriver.zip && \
@@ -12,7 +13,8 @@ RUN CHROME_DRIVER_VERSION=$(wget -q -O - https://edgedl.me.gvt1.com/edgedl/chrom
     rm /tmp/chromedriver.zip && rm -rf /opt/chromedriver-linux64
 
 # --- ARM64용 드라이버 다운로더 ---
-FROM --platform=linux/arm64 debian:bullseye-slim as chromedriver-arm64
+# [수정] 스테이지 이름을 'arm64'로 단순화
+FROM --platform=linux/arm64 debian:bullseye-slim as arm64
 RUN apt-get update && apt-get install -y wget unzip --no-install-recommends && rm -rf /var/lib/apt/lists/*
 RUN CHROME_DRIVER_VERSION=$(wget -q -O - https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE) && \
     wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_DRIVER_VERSION}/linux-arm64/chromedriver-linux-arm64.zip" -O /tmp/chromedriver.zip && \
@@ -28,7 +30,7 @@ FROM python:3.10-bullseye
 # 기본 의존성 패키지 설치
 RUN apt-get update && apt-get install -y \
     libglib2.0-0 libnss3 libgconf-2-4 libfontconfig1 \
-    libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 \
+    libx11-6 libx11-xcb1 libxcomposite1 libxdamage1 \
     libxext6 libxfixes3 libxrandr2 libgbm1 libgtk-3-0 libasound2 \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
@@ -42,8 +44,8 @@ RUN apt-get update && apt-get install -y \
 # Docker가 빌드 시점에 자동으로 채워주는 아키텍처 변수 선언
 ARG TARGETARCH
 
-# 아키텍처에 맞는 드라이버를 이전 스테이지에서 복사
-COPY --from=chromedriver-${TARGETARCH} /opt/chromedriver /usr/bin/chromedriver
+# [수정] 단순화된 스테이지 이름으로 드라이버를 복사
+COPY --from=${TARGETARCH} /opt/chromedriver /usr/bin/chromedriver
 RUN chmod +x /usr/bin/chromedriver
 
 WORKDIR /app
@@ -55,4 +57,3 @@ COPY ./app /app/app
 
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-
