@@ -58,6 +58,9 @@ def _scrape_details(driver: webdriver.Chrome, time_cutoff: datetime,
 def run_dcinside_scraper(crawl_hours: int):
   time_cutoff = datetime.now() - timedelta(hours=crawl_hours)
 
+  # [수정] 로그 파일 경로를 지정합니다.
+  log_path = "/tmp/chromedriver.log"
+
   options = webdriver.ChromeOptions()
   options.add_argument('--headless=new')
   options.add_argument('--no-sandbox')
@@ -67,11 +70,17 @@ def run_dcinside_scraper(crawl_hours: int):
   options.add_argument("--disable-extensions")
   options.add_argument("--disable-setuid-sandbox")
   options.add_argument("--remote-debugging-port=9222")
-  # [수정] Selenium에게 Chromium 브라우저의 정확한 위치를 알려줍니다.
-  # 이것이 현재 멈춤 현상을 해결하는 핵심적인 수정 사항입니다.
   options.binary_location = "/usr/bin/chromium"
+  # [추가] 브라우저의 상세 로깅을 활성화하고 로그 파일 경로를 지정합니다.
+  options.add_argument("--enable-logging")
+  options.add_argument("--v=1")
 
-  service = Service(executable_path="/usr/bin/chromedriver")
+  # [수정] Chromedriver 서비스의 모든 로그를 지정된 파일로 출력합니다.
+  service = Service(
+      executable_path="/usr/bin/chromedriver",
+      service_args=["--verbose"],
+      log_output=log_path
+  )
 
   print("[DEBUG] Selenium WebDriver를 생성합니다...")
   driver = webdriver.Chrome(service=service, options=options)
@@ -85,7 +94,7 @@ def run_dcinside_scraper(crawl_hours: int):
       list_url = f"{settings.BASE_URL}/board/lists/?id={gallery_id}&exception_mode=recommend"
       print(f"--- [ {gallery_name} ] 확인 중 ---")
 
-      response = requests.get(list_url, headers={'User-Agent': 'Mozilla/5.0'})
+      response = requests.get(list_url, headers={'User-Agent': 'Mozilla.5.0'})
       soup = BeautifulSoup(response.text, 'html.parser')
       post_links = [settings.BASE_URL + tag['href'] for row in
                     soup.select(settings.POST_ROW_SELECTOR) if
