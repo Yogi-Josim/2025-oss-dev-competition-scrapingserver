@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
 import requests
 from bs4 import BeautifulSoup
 from app.core.config import settings
@@ -25,7 +26,6 @@ def _scrape_details(driver: webdriver.Chrome, time_cutoff: datetime,
     if not post_time or post_time < time_cutoff:
       return "STOP"
 
-    print(f"    [성공] 시간 내 게시물 ({post_time.strftime('%Y-%m-%d %H:%M')})...")
     title = driver.find_element(By.CSS_SELECTOR, settings.TITLE_SELECTOR).text
     content = driver.find_element(By.CSS_SELECTOR,
                                   settings.CONTENT_SELECTOR).text
@@ -35,13 +35,12 @@ def _scrape_details(driver: webdriver.Chrome, time_cutoff: datetime,
                 if el.text]
 
     return {
-      "source_community": source_community,
-      "source_url": driver.current_url,
-      "raw_content": raw_content,
-      "crawled_at": datetime.now().isoformat(),
+      "source_community": source_community, "source_url": driver.current_url,
+      "raw_content": raw_content, "crawled_at": datetime.now().isoformat(),
       "comments": comments
     }
-  except Exception:
+  except Exception as e:
+    print(f"  [오류] 상세 정보 스크래핑 중 오류: {e}")
     return None
 
 
@@ -53,20 +52,17 @@ def run_dcinside_scraper(crawl_hours: int):
   options.add_argument('--no-sandbox')
   options.add_argument('--disable-dev-shm-usage')
   options.add_argument('--disable-gpu')
+  options.binary_location = "/usr/bin/chromium"
 
-  SELENIUM_GRID_URL = "http://localhost:4444/wd/hub"
+  service = Service(executable_path="/usr/bin/chromedriver")
 
-  print("Selenium Grid에 연결을 시도합니다...")
-  driver = webdriver.Remote(
-      command_executor=SELENIUM_GRID_URL,
-      options=options
-  )
-  print("WebDriver 생성 완료.")
+  print("[DEBUG] Selenium WebDriver를 생성합니다...")
+  driver = webdriver.Chrome(service=service, options=options)
+  print("[DEBUG] WebDriver 생성 완료.")
 
   final_results = []
   try:
     driver.set_page_load_timeout(30)
-
     for gallery in settings.GALLERIES_TO_SCRAPE:
       gallery_id, gallery_name = gallery["id"], gallery["name"]
       list_url = f"{settings.BASE_URL}/board/lists/?id={gallery_id}&exception_mode=recommend"
@@ -80,9 +76,7 @@ def run_dcinside_scraper(crawl_hours: int):
 
       for link in post_links:
         try:
-          print(f"[DEBUG] 게시물 접속 시도 (최대 30초): {link}")
           driver.get(link)
-          print(f"[DEBUG] 페이지 로딩 완료: {link}")
         except TimeoutException:
           print(f"  [경고] 페이지 로딩 시간 초과: {link}")
           continue
@@ -98,7 +92,6 @@ def run_dcinside_scraper(crawl_hours: int):
 
   finally:
     print("[DEBUG] 스크래핑 루프 종료. WebDriver를 닫습니다.")
-    if driver:
-      driver.quit()
+    driver.quit()
 
   return final_results

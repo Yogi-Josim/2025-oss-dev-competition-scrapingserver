@@ -1,6 +1,18 @@
-FROM seleniarm/standalone-chromium:124.0-chromedriver-124.0
+FROM python:3.10-bullseye
 
-RUN apt-get update && apt-get install -y python3 python3-pip
+RUN apt-get update && apt-get install -y \
+    libglib2.0-0 libnss3 libgconf-2-4 libfontconfig1 \
+    libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 \
+    libxext6 libxfixes3 libxrandr2 libgbm1 libgtk-3-0 libasound2 \
+    wget gnupg ca-certificates \
+    --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && apt-get install -y \
+    chromium \
+    chromium-driver \
+    --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
