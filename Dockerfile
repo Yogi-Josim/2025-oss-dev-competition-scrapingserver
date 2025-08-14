@@ -5,17 +5,19 @@ FROM debian:bullseye-slim as builder
 
 RUN apt-get update && apt-get install -y wget unzip --no-install-recommends && rm -rf /var/lib/apt/lists/*
 
-# [수정] 안정적인 특정 Chromedriver 버전을 하드코딩합니다.
+# 안정적인 특정 Chromedriver 버전을 하드코딩합니다.
 ARG CHROME_DRIVER_VERSION=126.0.6478.126
 
 # 각 아키텍처별 zip 파일을 저장할 디렉토리 생성
 RUN mkdir -p /drivers
 
 # AMD64용 드라이버 zip 다운로드 (새로운 공식 URL 사용)
-RUN wget -q "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_DRIVER_VERSION}/linux64/chromedriver-linux64.zip" -O /drivers/amd64.zip
+# [수정] --no-check-certificate 옵션을 추가하여 SSL 에러를 방지합니다.
+RUN wget --no-check-certificate -q "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_DRIVER_VERSION}/linux64/chromedriver-linux64.zip" -O /drivers/amd64.zip
 
 # ARM64용 드라이버 zip 다운로드 (새로운 공식 URL 사용)
-RUN wget -q "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_DRIVER_VERSION}/linux-arm64/chromedriver-linux-arm64.zip" -O /drivers/arm64.zip
+# [수정] --no-check-certificate 옵션을 추가하여 SSL 에러를 방지합니다.
+RUN wget --no-check-certificate -q "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_DRIVER_VERSION}/linux-arm64/chromedriver-linux-arm64.zip" -O /drivers/arm64.zip
 
 # =================================================================
 # 최종 어플리케이션 이미지 빌드 스테이지
