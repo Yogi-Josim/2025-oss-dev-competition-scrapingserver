@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0 libnss3 libgconf-2-4 libfontconfig1 \
     libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 \
     libxext6 libxfixes3 libxrandr2 libgbm1 libgtk-3-0 libasound2 \
-    wget gnupg ca-certificates unzip \
+    curl unzip \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
@@ -18,24 +18,33 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Chromedriver 설치
-RUN if [ "$TARGETARCH" = "amd64" ]; then \
-        echo "Installing chromium-driver for amd64 via apt-get..."; \
-        apt-get update && apt-get install -y chromium-driver --no-install-recommends && rm -rf /var/lib/apt/lists/*; \
-        # [수정된 유일한 부분] 실제 드라이버 경로에서 예상 경로로 심볼릭 링크(바로 가기)를 생성합니다.
-        ln -s /usr/lib/chromium-driver/chromedriver /usr/bin/chromedriver; \
+# Chromedriver 설치 (모든 아키텍처에서 직접 다운로드)
+# 'set -e'로 스크립트 실행 중 오류 발생 시 즉시 중단시킵니다.
+RUN set -e; \
+    \
+    # 아키텍처에 따라 변수 설정
+    if [ "$TARGETARCH" = "amd64" ]; then \
+        DRIVER_ARCH="linux64"; \
     elif [ "$TARGETARCH" = "arm64" ]; then \
-        echo "Downloading and installing chromedriver for arm64 manually..."; \
-        CHROME_DRIVER_VERSION=$(wget -q -O - https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE); \
-        wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_DRIVER_VERSION}/linux-arm64/chromedriver-linux-arm64.zip" -P /tmp; \
-        unzip /tmp/chromedriver-linux-arm64.zip -d /tmp; \
-        mv /tmp/chromedriver-linux-arm64/chromedriver /usr/bin/chromedriver; \
-        chmod +x /usr/bin/chromedriver; \
-        rm -rf /tmp/*; \
+        DRIVER_ARCH="linux-arm64"; \
     else \
         echo "Unsupported architecture: $TARGETARCH"; \
         exit 1; \
-    fi
+    fi; \
+    \
+    # 최신 드라이버 버전 확인
+    CHROME_DRIVER_VERSION=$(curl -sSL https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE); \
+    echo "Downloading ChromeDriver v${CHROME_DRIVER_VERSION} for ${TARGETARCH}..."; \
+    \
+    # 드라이버 다운로드 및 설치
+    curl -sSL "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_DRIVER_VERSION}/${DRIVER_ARCH}/chromedriver-${DRIVER_ARCH}.zip" -o /tmp/chromedriver.zip; \
+    unzip -q /tmp/chromedriver.zip -d /tmp; \
+    mv "/tmp/chromedriver-${DRIVER_ARCH}/chromedriver" /usr/bin/chromedriver; \
+    chmod +x /usr/bin/chromedriver; \
+    \
+    # 임시 파일 정리
+    rm /tmp/chromedriver.zip; \
+    rm -rf "/tmp/chromedriver-${DRIVER_ARCH}";
 
 WORKDIR /app
 
