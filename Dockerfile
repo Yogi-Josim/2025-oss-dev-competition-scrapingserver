@@ -10,12 +10,12 @@ RUN apt-get update && apt-get install -y wget --no-install-recommends && rm -rf 
 RUN mkdir -p /drivers
 
 # AMD64용 드라이버 zip 다운로드
-RUN LATEST_STABLE_AMD64=$(wget -q -O - https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE) && \
-    wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_STABLE_AMD64}/linux64/chromedriver-linux64.zip" -O /drivers/amd64.zip
+RUN LATEST_STABLE_AMD64=$(wget --no-check-certificate -q -O - https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE) && \
+    wget --no-check-certificate -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_STABLE_AMD64}/linux64/chromedriver-linux64.zip" -O /drivers/amd64.zip
 
 # ARM64용 드라이버 zip 다운로드
-RUN LATEST_STABLE_ARM64=$(wget -q -O - https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE) && \
-    wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_STABLE_ARM64}/linux-arm64/chromedriver-linux-arm64.zip" -O /drivers/arm64.zip
+RUN LATEST_STABLE_ARM64=$(wget --no-check-certificate -q -O - https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE) && \
+    wget --no-check-certificate -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_STABLE_ARM64}/linux-arm64/chromedriver-linux-arm64.zip" -O /drivers/arm64.zip
 
 # =================================================================
 # 최종 어플리케이션 이미지 빌드 스테이지
