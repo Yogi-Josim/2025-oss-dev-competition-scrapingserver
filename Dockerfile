@@ -30,21 +30,32 @@ RUN set -ex; \
         wget -q --no-check-certificate -O /tmp/chromedriver.zip "$DOWNLOAD_URL"; \
         unzip -q /tmp/chromedriver.zip -d /tmp; \
         mv /tmp/chromedriver-linux64/chromedriver /usr/bin/chromedriver; \
+        chmod +x /usr/bin/chromedriver; \
     \
-    # arm64의 경우, apt-get으로 설치하고 심볼릭 링크를 생성합니다.
+    # arm64의 경우, apt-get으로 설치하고, 설치된 파일 경로를 직접 찾아 링크를 생성합니다.
     elif [ "$TARGETARCH" = "arm64" ]; then \
         echo "Installing chromium-driver for arm64 via apt-get..."; \
         apt-get update && apt-get install -y chromium-driver --no-install-recommends; \
-        # [수정] -f (force) 옵션을 추가하여, 링크가 이미 존재하더라도 덮어쓰도록 합니다.
-        ln -sf /usr/lib/chromium-driver/chromedriver /usr/bin/chromedriver; \
+        \
+        # [수정] 패키지 파일 목록에서 chromedriver의 실제 경로를 찾습니다.
+        DRIVER_PATH=$(dpkg -L chromium-driver | grep -E '/chromedriver$'); \
+        if [ -z "$DRIVER_PATH" ]; then \
+            echo "!!! Could not find chromedriver in package files for arm64." >&2; \
+            exit 1; \
+        fi; \
+        \
+        echo "Found arm64 chromedriver at $DRIVER_PATH. Creating symlink..."; \
+        # 기존 링크를 삭제하고, 찾은 경로로 새로 생성합니다.
+        rm -f /usr/bin/chromedriver; \
+        ln -s "$DRIVER_PATH" /usr/bin/chromedriver; \
+        chmod +x "$DRIVER_PATH"; \
     \
     else \
         echo "Unsupported architecture: $TARGETARCH" >&2; \
         exit 1; \
     fi; \
     \
-    # 임시 파일 정리 및 권한 설정
-    chmod +x /usr/bin/chromedriver; \
+    # 임시 파일 정리
     rm -rf /tmp/* /var/lib/apt/lists/*; \
     echo "ChromeDriver installed successfully for ${TARGETARCH}.";
 
