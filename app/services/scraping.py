@@ -114,8 +114,10 @@ def run_dcinside_scraper(crawl_hours: int):
       print(f"  [오류] {gallery_name} 목록을 가져오는 중 오류 발생: {e}")
 
   final_results = []
-  with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-    print(f"총 {len(all_links_to_scrape)}개의 게시물을 병렬로 스크래핑합니다 (최대 10개 동시 실행)...")
+  # [수정] 동시 작업 수를 10개에서 4개로 줄여 서버 과부하를 방지합니다.
+  # 이 값은 서버 사양에 따라 조절할 수 있습니다.
+  with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+    print(f"총 {len(all_links_to_scrape)}개의 게시물을 병렬로 스크래핑합니다 (최대 4개 동시 실행)...")
     results_iterator = executor.map(scrape_single_post, all_links_to_scrape)
 
     for result in results_iterator:
@@ -126,6 +128,10 @@ def run_dcinside_scraper(crawl_hours: int):
   print(f"[DEBUG] 스크래핑 완료. 결과를 시간순으로 정렬합니다...")
   final_results.sort(key=lambda x: x.get('post_time', datetime.min),
                      reverse=True)
+
+  # [추가] 최종 반환 전, 정렬에 사용된 'post_time' 키를 제거합니다.
+  for result in final_results:
+    result.pop('post_time', None)
 
   print(f"[DEBUG] 정렬 완료. 총 {len(final_results)}개의 유효한 게시물 발견.")
   return final_results
