@@ -1,16 +1,35 @@
+# =================================================================
+# 스테이지 1: 모든 아키텍처용 Chromedriver 압축 파일을 '다운로드만' 하는 스테이지
+# 이 스테이지는 빌드를 실행하는 호스트의 네이티브 아키텍처로 실행되어 네트워크 안정성을 보장합니다.
+# =================================================================
+FROM debian:bullseye-slim as builder
+
+RUN apt-get update && apt-get install -y wget --no-install-recommends && rm -rf /var/lib/apt/lists/*
+
+# 각 아키텍처별 zip 파일을 저장할 디렉토리 생성
+RUN mkdir -p /drivers
+
+# AMD64용 드라이버 zip 다운로드
+RUN LATEST_STABLE_AMD64=$(wget -q -O - https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE) && \
+    wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_STABLE_AMD64}/linux64/chromedriver-linux64.zip" -O /drivers/amd64.zip
+
+# ARM64용 드라이버 zip 다운로드
+RUN LATEST_STABLE_ARM64=$(wget -q -O - https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE) && \
+    wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_STABLE_ARM64}/linux-arm64/chromedriver-linux-arm64.zip" -O /drivers/arm64.zip
+
+# =================================================================
+# 최종 어플리케이션 이미지 빌드 스테이지
+# =================================================================
 FROM python:3.10-bullseye
 
-# 기본 의존성 패키지 설치 (원래 버전에 있던 wget, unzip 사용)
+# 기본 의존성 패키지 및 unzip 설치
 RUN apt-get update && apt-get install -y \
     libglib2.0-0 libnss3 libgconf-2-4 libfontconfig1 \
     libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 \
     libxext6 libxfixes3 libxrandr2 libgbm1 libgtk-3-0 libasound2 \
-    wget unzip \
+    unzip \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
-
-# Docker 빌드 아키텍처 변수
-ARG TARGETARCH
 
 # Chromium 브라우저 설치
 RUN apt-get update && apt-get install -y \
@@ -18,36 +37,17 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Chromedriver 설치 과정을 두 단계로 분리하여 안정성 확보
+# Docker가 빌드 시점에 자동으로 채워주는 아키텍처 변수 선언
+ARG TARGETARCH
 
-# 1단계: 드라이버 버전만 확인하여 임시 파일에 저장
-RUN wget -q -O /tmp/latest_version https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE
+# 빌더 스테이지에서 아키텍처에 맞는 'zip' 파일을 복사
+COPY --from=builder /drivers/${TARGETARCH}.zip /tmp/chromedriver.zip
 
-# 2단계: 저장된 버전을 읽어와서 드라이버 다운로드 및 설치
-RUN set -e; \
-    \
-    # 아키텍처에 따라 변수 설정
-    if [ "$TARGETARCH" = "amd64" ]; then \
-        DRIVER_ARCH="linux64"; \
-    elif [ "$TARGETARCH" = "arm64" ]; then \
-        DRIVER_ARCH="linux-arm64"; \
-    else \
-        echo "Unsupported architecture: $TARGETARCH"; \
-        exit 1; \
-    fi; \
-    \
-    # 임시 파일에서 버전 정보 읽기
-    CHROME_DRIVER_VERSION=$(cat /tmp/latest_version); \
-    echo "Downloading ChromeDriver v${CHROME_DRIVER_VERSION} for ${TARGETARCH}..."; \
-    \
-    # 드라이버 다운로드 및 설치
-    wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_DRIVER_VERSION}/${DRIVER_ARCH}/chromedriver-${DRIVER_ARCH}.zip" -O /tmp/chromedriver.zip; \
-    unzip -q /tmp/chromedriver.zip -d /tmp; \
-    mv "/tmp/chromedriver-${DRIVER_ARCH}/chromedriver" /usr/bin/chromedriver; \
-    chmod +x /usr/bin/chromedriver; \
-    \
-    # 임시 파일 정리
-    rm -rf /tmp/*;
+# 복사된 zip 파일의 압축을 풀고 드라이버 설치
+RUN unzip -q /tmp/chromedriver.zip -d /tmp/driver_unzipped && \
+    mv /tmp/driver_unzipped/*/chromedriver /usr/bin/chromedriver && \
+    chmod +x /usr/bin/chromedriver && \
+    rm -rf /tmp/chromedriver.zip /tmp/driver_unzipped
 
 WORKDIR /app
 
