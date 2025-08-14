@@ -5,7 +5,6 @@ from selenium.common.exceptions import TimeoutException, \
   StaleElementReferenceException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
-# [추가] WebDriverWait와 Expected Conditions를 임포트합니다.
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import requests
@@ -23,8 +22,6 @@ def _parse_time(time_str: str) -> datetime:
 def _scrape_details(driver: webdriver.Chrome, time_cutoff: datetime,
     source_community: str):
   try:
-    # [수정] 각 요소가 화면에 나타날 때까지 최대 10초간 기다립니다.
-    # 이 방법이 Stale Element Reference 에러를 해결하는 가장 표준적인 방법입니다.
     wait = WebDriverWait(driver, 10)
 
     time_element = wait.until(
@@ -41,8 +38,6 @@ def _scrape_details(driver: webdriver.Chrome, time_cutoff: datetime,
         (By.CSS_SELECTOR, settings.CONTENT_SELECTOR))).text
     raw_content = f"{title}\n\n{content}"
 
-    # 댓글은 동적으로 로딩될 수 있으므로, 잠시 기다린 후 수집합니다.
-    # presence_of_all_elements_located를 사용해 모든 댓글 요소를 기다립니다.
     comment_elements = wait.until(EC.presence_of_all_elements_located(
         (By.CSS_SELECTOR, settings.COMMENT_LIST_SELECTOR)))
     comments = [el.text for el in comment_elements if el.text]
@@ -52,7 +47,6 @@ def _scrape_details(driver: webdriver.Chrome, time_cutoff: datetime,
       "raw_content": raw_content, "crawled_at": datetime.now().isoformat(),
       "comments": comments
     }
-  # [수정] StaleElementReferenceException을 명시적으로 처리하여 안정성을 높입니다.
   except StaleElementReferenceException:
     print("  [경고] Stale Element 에러 발생. 다음 게시물로 넘어갑니다.")
     return None
@@ -70,6 +64,12 @@ def run_dcinside_scraper(crawl_hours: int):
   options.add_argument('--disable-dev-shm-usage')
   options.add_argument('--disable-gpu')
   options.add_argument("--window-size=1920,1080")
+  options.add_argument("--disable-extensions")
+  options.add_argument("--disable-setuid-sandbox")
+  options.add_argument("--remote-debugging-port=9222")
+  # [수정] Selenium에게 Chromium 브라우저의 정확한 위치를 알려줍니다.
+  # 이것이 현재 멈춤 현상을 해결하는 핵심적인 수정 사항입니다.
+  options.binary_location = "/usr/bin/chromium"
 
   service = Service(executable_path="/usr/bin/chromedriver")
 
