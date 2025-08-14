@@ -22,8 +22,8 @@ RUN apt-get update && apt-get install -y \
 RUN if [ "$TARGETARCH" = "amd64" ]; then \
         echo "Installing chromium-driver for amd64 via apt-get..."; \
         apt-get update && apt-get install -y chromium-driver --no-install-recommends && rm -rf /var/lib/apt/lists/*; \
-        # 실제 드라이버 경로를 찾아 /usr/bin/chromedriver 로 심볼릭 링크를 생성하여 경로 일관성 확보
-        DRIVER_PATH=$(find /usr/lib/ -name chromedriver | head -n 1); \
+        # [수정!] 파일 시스템 전체에서 드라이버를 찾아 심볼릭 링크 생성
+        DRIVER_PATH=$(find / -name chromedriver 2>/dev/null | head -n 1); \
         if [ -n "$DRIVER_PATH" ]; then \
             echo "Chromedriver found at $DRIVER_PATH. Creating symlink..."; \
             ln -s "$DRIVER_PATH" /usr/bin/chromedriver; \
