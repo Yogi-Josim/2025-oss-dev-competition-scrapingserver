@@ -8,19 +8,32 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# chromium 브라우저만 apt로 설치하고, chromedriver는 직접 다운로드
+ARG TARGETARCH
+
 RUN apt-get update && apt-get install -y \
     chromium \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && CHROME_DRIVER_VERSION=$(wget -q -O - https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE) \
-    && echo "Latest Stable ChromeDriver version: $CHROME_DRIVER_VERSION" \
-    && wget -q https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_DRIVER_VERSION}/linux-arm64/chromedriver-linux-arm64.zip -P /tmp \
-    && unzip /tmp/chromedriver-linux-arm64.zip -d /tmp \
-    && mv /tmp/chromedriver-linux-arm64/chromedriver /usr/bin/chromedriver \
+    && echo "Latest Stable ChromeDriver version: $CHROME_DRIVER_VERSION for architecture: $TARGETARCH" \
+    && if [ "$TARGETARCH" = "amd64" ]; then \
+        DRIVER_URL="https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_DRIVER_VERSION}/linux64/chromedriver-linux64.zip"; \
+        ZIP_FILE="chromedriver-linux64.zip"; \
+        INNER_DIR="chromedriver-linux64"; \
+       elif [ "$TARGETARCH" = "arm64" ]; then \
+        DRIVER_URL="https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_DRIVER_VERSION}/linux-arm64/chromedriver-linux-arm64.zip"; \
+        ZIP_FILE="chromedriver-linux-arm64.zip"; \
+        INNER_DIR="chromedriver-linux-arm64"; \
+       else \
+        echo "Unsupported architecture: $TARGETARCH"; \
+        exit 1; \
+       fi \
+    && wget -q "$DRIVER_URL" -P /tmp \
+    && unzip "/tmp/$ZIP_FILE" -d /tmp \
+    && mv "/tmp/$INNER_DIR/chromedriver" /usr/bin/chromedriver \
     && chmod +x /usr/bin/chromedriver \
-    && rm /tmp/chromedriver-linux-arm64.zip \
-    && rm -rf /tmp/chromedriver-linux-arm64
+    && rm "/tmp/$ZIP_FILE" \
+    && rm -rf "/tmp/$INNER_DIR"
 
 WORKDIR /app
 
