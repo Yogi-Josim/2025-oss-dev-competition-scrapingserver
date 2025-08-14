@@ -1,6 +1,6 @@
 FROM python:3.10-bullseye
 
-# 기본 의존성 패키지 설치 (wget, unzip 포함)
+# 기본 의존성 패키지 설치
 RUN apt-get update && apt-get install -y \
     libglib2.0-0 libnss3 libgconf-2-4 libfontconfig1 \
     libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 \
@@ -18,34 +18,36 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Chromedriver 설치 (모든 아키텍처에서 직접 다운로드)
+# Chromedriver 설치
+# 각 아키텍처에 맞는 가장 안정적인 방법으로 설치합니다.
 RUN set -ex; \
     \
-    # 안정성이 검증된 특정 버전을 하드코딩합니다.
-    CHROME_DRIVER_VERSION="126.0.6478.126"; \
-    \
-    # [수정] 각 아키텍처에 맞는 올바른 플랫폼 이름을 사용하도록 되돌립니다.
+    # amd64의 경우, 구글에서 직접 다운로드합니다.
     if [ "$TARGETARCH" = "amd64" ]; then \
-        DRIVER_PLATFORM="linux64"; \
+        echo "Downloading chromedriver for amd64..."; \
+        CHROME_DRIVER_VERSION="126.0.6478.126"; \
+        DOWNLOAD_URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROME_DRIVER_VERSION}/linux64/chromedriver-linux64.zip"; \
+        wget -q --no-check-certificate -O /tmp/chromedriver.zip "$DOWNLOAD_URL"; \
+        unzip -q /tmp/chromedriver.zip -d /tmp; \
+        mv /tmp/chromedriver-linux64/chromedriver /usr/bin/chromedriver; \
+    \
+    # arm64의 경우, apt-get으로 설치하고 심볼릭 링크를 생성합니다.
     elif [ "$TARGETARCH" = "arm64" ]; then \
-        DRIVER_PLATFORM="linux-arm64"; \
+        echo "Installing chromium-driver for arm64 via apt-get..."; \
+        apt-get update && apt-get install -y chromium-driver --no-install-recommends; \
+        # 'Exec format error'를 피하기 위해 arm64 네이티브 드라이버를 설치하고,
+        # 'path is not valid' 에러를 피하기 위해 심볼릭 링크를 생성합니다.
+        ln -s /usr/lib/chromium-driver/chromedriver /usr/bin/chromedriver; \
+    \
     else \
         echo "Unsupported architecture: $TARGETARCH" >&2; \
         exit 1; \
     fi; \
     \
-    DOWNLOAD_URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROME_DRIVER_VERSION}/${DRIVER_PLATFORM}/chromedriver-${DRIVER_PLATFORM}.zip"; \
-    echo "Downloading ChromeDriver v${CHROME_DRIVER_VERSION} for ${TARGETARCH} (using ${DRIVER_PLATFORM} package)..."; \
-    \
-    # 드라이버 다운로드 및 설치 (SSL 인증서 검증 비활성화 추가)
-    wget -q --no-check-certificate -O /tmp/chromedriver.zip "$DOWNLOAD_URL"; \
-    \
-    # 압축 해제 및 설치
-    unzip -q /tmp/chromedriver.zip -d /tmp; \
-    mv "/tmp/chromedriver-${DRIVER_PLATFORM}/chromedriver" /usr/bin/chromedriver; \
+    # 임시 파일 정리 및 권한 설정
     chmod +x /usr/bin/chromedriver; \
-    rm -rf /tmp/*; \
-    echo "ChromeDriver installed successfully.";
+    rm -rf /tmp/* /var/lib/apt/lists/*; \
+    echo "ChromeDriver installed successfully for ${TARGETARCH}.";
 
 WORKDIR /app
 
