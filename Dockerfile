@@ -15,12 +15,12 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && CHROME_DRIVER_VERSION=$(wget -q -O - https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE) \
     && echo "Latest Stable ChromeDriver version: $CHROME_DRIVER_VERSION" \
-    && wget -q https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_DRIVER_VERSION}/linux64/chromedriver-linux64.zip -P /tmp \
-    && unzip /tmp/chromedriver-linux64.zip -d /tmp \
-    && mv /tmp/chromedriver-linux64/chromedriver /usr/bin/chromedriver \
+    && wget -q https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_DRIVER_VERSION}/linux-arm64/chromedriver-linux-arm64.zip -P /tmp \
+    && unzip /tmp/chromedriver-linux-arm64.zip -d /tmp \
+    && mv /tmp/chromedriver-linux-arm64/chromedriver /usr/bin/chromedriver \
     && chmod +x /usr/bin/chromedriver \
-    && rm /tmp/chromedriver-linux64.zip \
-    && rm -rf /tmp/chromedriver-linux64
+    && rm /tmp/chromedriver-linux-arm64.zip \
+    && rm -rf /tmp/chromedriver-linux-arm64
 
 WORKDIR /app
 
