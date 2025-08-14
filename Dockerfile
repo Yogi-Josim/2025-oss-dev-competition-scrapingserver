@@ -19,24 +19,16 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Chromedriver 설치 (모든 아키텍처에서 직접 다운로드)
-# [수정] 불안정한 동적 버전 확인 로직을 제거하고, 안정적인 특정 버전을 직접 다운로드하여 빌드 안정성을 확보합니다.
 RUN set -ex; \
     \
     # 안정성이 검증된 특정 버전을 하드코딩합니다.
     CHROME_DRIVER_VERSION="126.0.6478.126"; \
     \
-    # 아키텍처에 따라 플랫폼 변수 설정
-    if [ "$TARGETARCH" = "amd64" ]; then \
-        DRIVER_PLATFORM="linux64"; \
-    elif [ "$TARGETARCH" = "arm64" ]; then \
-        DRIVER_PLATFORM="linux-arm64"; \
-    else \
-        echo "Unsupported architecture: $TARGETARCH" >&2; \
-        exit 1; \
-    fi; \
+    # [수정] amd64와 arm64 모두 'linux64' 플랫폼을 사용합니다. 이것이 핵심적인 수정 사항입니다.
+    DRIVER_PLATFORM="linux64"; \
     \
     DOWNLOAD_URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROME_DRIVER_VERSION}/${DRIVER_PLATFORM}/chromedriver-${DRIVER_PLATFORM}.zip"; \
-    echo "Downloading ChromeDriver v${CHROME_DRIVER_VERSION} for ${TARGETARCH}..."; \
+    echo "Downloading ChromeDriver v${CHROME_DRIVER_VERSION} for ${TARGETARCH} (using ${DRIVER_PLATFORM} package)..."; \
     \
     # 드라이버 다운로드 및 설치 (SSL 인증서 검증 비활성화 추가)
     wget -q --no-check-certificate -O /tmp/chromedriver.zip "$DOWNLOAD_URL"; \
