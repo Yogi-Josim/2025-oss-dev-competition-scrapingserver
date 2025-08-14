@@ -35,9 +35,8 @@ RUN set -ex; \
     elif [ "$TARGETARCH" = "arm64" ]; then \
         echo "Installing chromium-driver for arm64 via apt-get..."; \
         apt-get update && apt-get install -y chromium-driver --no-install-recommends; \
-        # 'Exec format error'를 피하기 위해 arm64 네이티브 드라이버를 설치하고,
-        # 'path is not valid' 에러를 피하기 위해 심볼릭 링크를 생성합니다.
-        ln -s /usr/lib/chromium-driver/chromedriver /usr/bin/chromedriver; \
+        # [수정] -f (force) 옵션을 추가하여, 링크가 이미 존재하더라도 덮어쓰도록 합니다.
+        ln -sf /usr/lib/chromium-driver/chromedriver /usr/bin/chromedriver; \
     \
     else \
         echo "Unsupported architecture: $TARGETARCH" >&2; \
