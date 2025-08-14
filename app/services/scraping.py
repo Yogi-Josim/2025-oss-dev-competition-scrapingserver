@@ -52,7 +52,14 @@ def run_dcinside_scraper(crawl_hours: int):
   options.add_argument('--no-sandbox')
   options.add_argument('--disable-dev-shm-usage')
   options.add_argument('--disable-gpu')
+  # [수정] Docker 환경에서 헤드리스 브라우저의 안정적인 실행을 위한 옵션을 추가합니다.
+  options.add_argument("--window-size=1920,1080")
+  options.add_argument("--disable-extensions")
+  options.add_argument("--disable-setuid-sandbox")
+  options.add_argument("--remote-debugging-port=9222")
 
+  # Dockerfile이 /usr/bin/chromedriver에 정확히 설치해주므로,
+  # 경로를 직접 지정하는 것이 가장 간단하고 확실합니다.
   service = Service(executable_path="/usr/bin/chromedriver")
 
   print("[DEBUG] Selenium WebDriver를 생성합니다...")
