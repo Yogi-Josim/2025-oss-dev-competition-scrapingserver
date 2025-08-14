@@ -1,21 +1,21 @@
 # =================================================================
 # 스테이지 1: 모든 아키텍처용 Chromedriver 압축 파일을 '다운로드만' 하는 스테이지
-# 이 스테이지는 빌드를 실행하는 호스트의 네이티브 아키텍처로 실행되어 네트워크 안정성을 보장합니다.
 # =================================================================
 FROM debian:bullseye-slim as builder
 
-RUN apt-get update && apt-get install -y wget --no-install-recommends && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y wget unzip --no-install-recommends && rm -rf /var/lib/apt/lists/*
+
+# [수정] 안정적인 특정 Chromedriver 버전을 하드코딩합니다.
+ARG CHROME_DRIVER_VERSION=126.0.6478.126
 
 # 각 아키텍처별 zip 파일을 저장할 디렉토리 생성
 RUN mkdir -p /drivers
 
-# AMD64용 드라이버 zip 다운로드
-RUN LATEST_STABLE_AMD64=$(wget --no-check-certificate -q -O - https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE) && \
-    wget --no-check-certificate -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_STABLE_AMD64}/linux64/chromedriver-linux64.zip" -O /drivers/amd64.zip
+# AMD64용 드라이버 zip 다운로드 (새로운 공식 URL 사용)
+RUN wget -q "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_DRIVER_VERSION}/linux64/chromedriver-linux64.zip" -O /drivers/amd64.zip
 
-# ARM64용 드라이버 zip 다운로드
-RUN LATEST_STABLE_ARM64=$(wget --no-check-certificate -q -O - https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE) && \
-    wget --no-check-certificate -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_STABLE_ARM64}/linux-arm64/chromedriver-linux-arm64.zip" -O /drivers/arm64.zip
+# ARM64용 드라이버 zip 다운로드 (새로운 공식 URL 사용)
+RUN wget -q "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_DRIVER_VERSION}/linux-arm64/chromedriver-linux-arm64.zip" -O /drivers/arm64.zip
 
 # =================================================================
 # 최종 어플리케이션 이미지 빌드 스테이지
