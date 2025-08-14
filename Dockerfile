@@ -2,7 +2,11 @@
 # 스테이지 1: 모든 아키텍처의 Chromedriver를 미리 다운로드하는 통합 스테이지
 # =================================================================
 FROM debian:bullseye-slim as builder
-RUN apt-get update && apt-get install -y wget unzip --no-install-recommends && rm -rf /var/lib/apt/lists/*
+# [수정] ca-certificates 패키지를 명시적으로 재설치하여 SSL/TLS 문제를 방지합니다.
+RUN apt-get update && \
+    apt-get install -y --reinstall ca-certificates && \
+    apt-get install -y wget unzip --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 
 # 각 아키텍처별 디렉토리 생성
 RUN mkdir -p /drivers/amd64 && mkdir -p /drivers/arm64
@@ -43,7 +47,7 @@ RUN apt-get update && apt-get install -y \
 # Docker가 빌드 시점에 자동으로 채워주는 아키텍처 변수 선언
 ARG TARGETARCH
 
-# [수정] 통합 빌더 스테이지에서 아키텍처에 맞는 드라이버를 복사
+# 통합 빌더 스테이지에서 아키텍처에 맞는 드라이버를 복사
 COPY --from=builder /drivers/${TARGETARCH}/chromedriver /usr/bin/chromedriver
 RUN chmod +x /usr/bin/chromedriver
 
