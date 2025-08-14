@@ -2,7 +2,8 @@
 # 스테이지 1: 각 아키텍처용 Chromedriver 압축 파일을 '다운로드만' 하는 스테이지
 # =================================================================
 FROM debian:bullseye-slim as builder
-RUN apt-get update && apt-get install -y wget --no-install-recommends && rm -rf /var/lib/apt/lists/*
+# [수정] ca-certificates 패키지를 추가하여 SSL/TLS 문제를 방지합니다.
+RUN apt-get update && apt-get install -y wget ca-certificates --no-install-recommends && rm -rf /var/lib/apt/lists/*
 
 # 각 아키텍처별 zip 파일을 저장할 디렉토리 생성
 RUN mkdir -p /drivers
@@ -38,10 +39,10 @@ RUN apt-get update && apt-get install -y \
 # Docker가 빌드 시점에 자동으로 채워주는 아키텍처 변수 선언
 ARG TARGETARCH
 
-# [수정] 빌더 스테이지에서 아키텍처에 맞는 'zip' 파일을 복사
+# 빌더 스테이지에서 아키텍처에 맞는 'zip' 파일을 복사
 COPY --from=builder /drivers/${TARGETARCH}.zip /tmp/chromedriver.zip
 
-# [수정] 복사된 zip 파일의 압축을 풀고 드라이버 설치
+# 복사된 zip 파일의 압축을 풀고 드라이버 설치
 RUN unzip /tmp/chromedriver.zip -d /tmp/driver_unzipped && \
     mv /tmp/driver_unzipped/*/chromedriver /usr/bin/chromedriver && \
     chmod +x /usr/bin/chromedriver && \
