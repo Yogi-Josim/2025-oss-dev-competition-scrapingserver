@@ -1,12 +1,10 @@
 import time
 from datetime import datetime, timedelta
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException, \
-  StaleElementReferenceException
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+# WebDriverWait와 EC는 더 이상 필요하지 않습니다.
 import requests
 from bs4 import BeautifulSoup
 from app.core.config import settings
@@ -19,47 +17,45 @@ def _parse_time(time_str: str) -> datetime:
     return None
 
 
-def _scrape_details(driver: webdriver.Chrome, time_cutoff: datetime,
-    source_community: str):
+# [수정] Selenium은 HTML을 가져오는 역할만 하고, 파싱은 BeautifulSoup이 담당합니다.
+# 이 방법이 동적 웹사이트를 스크래핑할 때 가장 안정적입니다.
+def _scrape_details_with_bs(page_source: str, time_cutoff: datetime,
+    source_community: str, current_url: str):
   try:
-    wait = WebDriverWait(driver, 10)
+    soup = BeautifulSoup(page_source, 'html.parser')
 
-    time_element = wait.until(
-      EC.presence_of_element_located((By.CSS_SELECTOR, settings.TIME_SELECTOR)))
-    post_time_str = time_element.get_attribute('title')
+    # BeautifulSoup을 사용하여 요소 찾기
+    time_element = soup.select_one(settings.TIME_SELECTOR)
+    # DCinside는 title 속성에 전체 날짜/시간이 들어있습니다.
+    post_time_str = time_element.get('title') if time_element else ''
     post_time = _parse_time(post_time_str)
 
     if not post_time or post_time < time_cutoff:
       return "STOP"
 
-    title = wait.until(EC.presence_of_element_located(
-        (By.CSS_SELECTOR, settings.TITLE_SELECTOR))).text
-    content = wait.until(EC.presence_of_element_located(
-        (By.CSS_SELECTOR, settings.CONTENT_SELECTOR))).text
+    title_element = soup.select_one(settings.TITLE_SELECTOR)
+    title = title_element.text.strip() if title_element else "제목 없음"
+
+    content_element = soup.select_one(settings.CONTENT_SELECTOR)
+    content = content_element.text.strip() if content_element else ""
+
     raw_content = f"{title}\n\n{content}"
 
-    comment_elements = wait.until(EC.presence_of_all_elements_located(
-        (By.CSS_SELECTOR, settings.COMMENT_LIST_SELECTOR)))
-    comments = [el.text for el in comment_elements if el.text]
+    comment_elements = soup.select(settings.COMMENT_LIST_SELECTOR)
+    comments = [el.text.strip() for el in comment_elements if el.text.strip()]
 
     return {
-      "source_community": source_community, "source_url": driver.current_url,
+      "source_community": source_community, "source_url": current_url,
       "raw_content": raw_content, "crawled_at": datetime.now().isoformat(),
       "comments": comments
     }
-  except StaleElementReferenceException:
-    print("  [경고] Stale Element 에러 발생. 다음 게시물로 넘어갑니다.")
-    return None
   except Exception as e:
-    print(f"  [오류] 상세 정보 스크래핑 중 오류: {e}")
+    print(f"  [오류] BeautifulSoup 파싱 중 오류: {e}")
     return None
 
 
 def run_dcinside_scraper(crawl_hours: int):
   time_cutoff = datetime.now() - timedelta(hours=crawl_hours)
-
-  # [수정] 로그 파일 경로를 지정합니다.
-  log_path = "/tmp/chromedriver.log"
 
   options = webdriver.ChromeOptions()
   options.add_argument('--headless=new')
@@ -67,20 +63,9 @@ def run_dcinside_scraper(crawl_hours: int):
   options.add_argument('--disable-dev-shm-usage')
   options.add_argument('--disable-gpu')
   options.add_argument("--window-size=1920,1080")
-  options.add_argument("--disable-extensions")
-  options.add_argument("--disable-setuid-sandbox")
-  options.add_argument("--remote-debugging-port=9222")
   options.binary_location = "/usr/bin/chromium"
-  # [추가] 브라우저의 상세 로깅을 활성화하고 로그 파일 경로를 지정합니다.
-  options.add_argument("--enable-logging")
-  options.add_argument("--v=1")
 
-  # [수정] Chromedriver 서비스의 모든 로그를 지정된 파일로 출력합니다.
-  service = Service(
-      executable_path="/usr/bin/chromedriver",
-      service_args=["--verbose"],
-      log_output=log_path
-  )
+  service = Service(executable_path="/usr/bin/chromedriver")
 
   print("[DEBUG] Selenium WebDriver를 생성합니다...")
   driver = webdriver.Chrome(service=service, options=options)
@@ -88,13 +73,15 @@ def run_dcinside_scraper(crawl_hours: int):
 
   final_results = []
   try:
+    # 페이지 로드 타임아웃은 그대로 유지합니다.
     driver.set_page_load_timeout(30)
     for gallery in settings.GALLERIES_TO_SCRAPE:
       gallery_id, gallery_name = gallery["id"], gallery["name"]
       list_url = f"{settings.BASE_URL}/board/lists/?id={gallery_id}&exception_mode=recommend"
       print(f"--- [ {gallery_name} ] 확인 중 ---")
 
-      response = requests.get(list_url, headers={'User-Agent': 'Mozilla.5.0'})
+      # 게시물 목록은 원래대로 requests를 사용합니다. (빠르고 효율적)
+      response = requests.get(list_url, headers={'User-Agent': 'Mozilla/5.0'})
       soup = BeautifulSoup(response.text, 'html.parser')
       post_links = [settings.BASE_URL + tag['href'] for row in
                     soup.select(settings.POST_ROW_SELECTOR) if
@@ -103,6 +90,8 @@ def run_dcinside_scraper(crawl_hours: int):
       for link in post_links:
         try:
           driver.get(link)
+          # [수정] 페이지가 로드된 후, 최종 HTML 소스를 가져옵니다.
+          page_source = driver.page_source
         except TimeoutException:
           print(f"  [경고] 페이지 로딩 시간 초과: {link}")
           continue
@@ -110,7 +99,10 @@ def run_dcinside_scraper(crawl_hours: int):
           print(f"  [경고] 페이지 로딩 중 알 수 없는 오류: {link}, 에러: {e}")
           continue
 
-        result = _scrape_details(driver, time_cutoff, f"dcinside_{gallery_id}")
+        # [수정] 가져온 HTML 소스를 새로운 파싱 함수에 전달합니다.
+        result = _scrape_details_with_bs(page_source, time_cutoff,
+                                         f"dcinside_{gallery_id}",
+                                         driver.current_url)
         if result == "STOP":
           break
         elif result:
