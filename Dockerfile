@@ -1,6 +1,6 @@
 FROM python:3.10-bullseye
 
-# 기본 의존성 패키지 설치
+# 기본 의존성 패키지 설치 (curl, unzip 포함)
 RUN apt-get update && apt-get install -y \
     libglib2.0-0 libnss3 libgconf-2-4 libfontconfig1 \
     libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 \
@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Chromedriver 설치 (모든 아키텍처에서 직접 다운로드)
-# 'set -e'로 스크립트 실행 중 오류 발생 시 즉시 중단시킵니다.
+# 이 방법은 apt-get의 불안정성을 피하고, 두 아키텍처 모두에 일관된 설치를 보장합니다.
 RUN set -e; \
     \
     # 아키텍처에 따라 변수 설정
@@ -32,19 +32,15 @@ RUN set -e; \
         exit 1; \
     fi; \
     \
-    # 최신 드라이버 버전 확인
     CHROME_DRIVER_VERSION=$(curl -sSL https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE); \
     echo "Downloading ChromeDriver v${CHROME_DRIVER_VERSION} for ${TARGETARCH}..."; \
     \
-    # 드라이버 다운로드 및 설치
     curl -sSL "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_DRIVER_VERSION}/${DRIVER_ARCH}/chromedriver-${DRIVER_ARCH}.zip" -o /tmp/chromedriver.zip; \
     unzip -q /tmp/chromedriver.zip -d /tmp; \
     mv "/tmp/chromedriver-${DRIVER_ARCH}/chromedriver" /usr/bin/chromedriver; \
     chmod +x /usr/bin/chromedriver; \
     \
-    # 임시 파일 정리
-    rm /tmp/chromedriver.zip; \
-    rm -rf "/tmp/chromedriver-${DRIVER_ARCH}";
+    rm -rf /tmp/*;
 
 WORKDIR /app
 
