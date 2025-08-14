@@ -1,40 +1,31 @@
 # =================================================================
-# 스테이지 1: 모든 아키텍처의 Chromedriver를 미리 다운로드하는 통합 스테이지
+# 스테이지 1: 각 아키텍처용 Chromedriver 압축 파일을 '다운로드만' 하는 스테이지
 # =================================================================
 FROM debian:bullseye-slim as builder
-# [수정] ca-certificates 패키지를 명시적으로 재설치하여 SSL/TLS 문제를 방지합니다.
-RUN apt-get update && \
-    apt-get install -y --reinstall ca-certificates && \
-    apt-get install -y wget unzip --no-install-recommends && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y wget --no-install-recommends && rm -rf /var/lib/apt/lists/*
 
-# 각 아키텍처별 디렉토리 생성
-RUN mkdir -p /drivers/amd64 && mkdir -p /drivers/arm64
+# 각 아키텍처별 zip 파일을 저장할 디렉토리 생성
+RUN mkdir -p /drivers
 
-# AMD64용 드라이버 다운로드 및 배치
+# AMD64용 드라이버 zip 다운로드
 RUN CHROME_DRIVER_VERSION_AMD64=$(wget -q -O - https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE) && \
-    wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_DRIVER_VERSION_AMD64}/linux64/chromedriver-linux64.zip" -O /tmp/chromedriver-amd64.zip && \
-    unzip /tmp/chromedriver-amd64.zip -d /tmp/amd64 && \
-    mv /tmp/amd64/chromedriver-linux64/chromedriver /drivers/amd64/chromedriver && \
-    rm -rf /tmp/*
+    wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_DRIVER_VERSION_AMD64}/linux64/chromedriver-linux64.zip" -O /drivers/amd64.zip
 
-# ARM64용 드라이버 다운로드 및 배치
+# ARM64용 드라이버 zip 다운로드
 RUN CHROME_DRIVER_VERSION_ARM64=$(wget -q -O - https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE) && \
-    wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_DRIVER_VERSION_ARM64}/linux-arm64/chromedriver-linux-arm64.zip" -O /tmp/chromedriver-arm64.zip && \
-    unzip /tmp/chromedriver-arm64.zip -d /tmp/arm64 && \
-    mv /tmp/arm64/chromedriver-linux-arm64/chromedriver /drivers/arm64/chromedriver && \
-    rm -rf /tmp/*
+    wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_DRIVER_VERSION_ARM64}/linux-arm64/chromedriver-linux-arm64.zip" -O /drivers/arm64.zip
 
 # =================================================================
 # 최종 어플리케이션 이미지 빌드 스테이지
 # =================================================================
 FROM python:3.10-bullseye
 
-# 기본 의존성 패키지 설치
+# 기본 의존성 패키지 및 unzip 설치
 RUN apt-get update && apt-get install -y \
     libglib2.0-0 libnss3 libgconf-2-4 libfontconfig1 \
     libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 \
     libxext6 libxfixes3 libxrandr2 libgbm1 libgtk-3-0 libasound2 \
+    unzip \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
@@ -47,9 +38,14 @@ RUN apt-get update && apt-get install -y \
 # Docker가 빌드 시점에 자동으로 채워주는 아키텍처 변수 선언
 ARG TARGETARCH
 
-# 통합 빌더 스테이지에서 아키텍처에 맞는 드라이버를 복사
-COPY --from=builder /drivers/${TARGETARCH}/chromedriver /usr/bin/chromedriver
-RUN chmod +x /usr/bin/chromedriver
+# [수정] 빌더 스테이지에서 아키텍처에 맞는 'zip' 파일을 복사
+COPY --from=builder /drivers/${TARGETARCH}.zip /tmp/chromedriver.zip
+
+# [수정] 복사된 zip 파일의 압축을 풀고 드라이버 설치
+RUN unzip /tmp/chromedriver.zip -d /tmp/driver_unzipped && \
+    mv /tmp/driver_unzipped/*/chromedriver /usr/bin/chromedriver && \
+    chmod +x /usr/bin/chromedriver && \
+    rm -rf /tmp/chromedriver.zip /tmp/driver_unzipped
 
 WORKDIR /app
 
