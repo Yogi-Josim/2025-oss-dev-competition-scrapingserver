@@ -18,8 +18,12 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Chromedriver 설치 (모든 아키텍처에서 직접 다운로드)
-# 이 방법은 apt-get의 불안정성을 피하고, 두 아키텍처 모두에 일관된 설치를 보장합니다.
+# Chromedriver 설치 과정을 두 단계로 분리하여 안정성 확보
+
+# 1단계: 드라이버 버전만 확인하여 임시 파일에 저장
+RUN wget -q -O /tmp/latest_version https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE
+
+# 2단계: 저장된 버전을 읽어와서 드라이버 다운로드 및 설치
 RUN set -e; \
     \
     # 아키텍처에 따라 변수 설정
@@ -32,11 +36,11 @@ RUN set -e; \
         exit 1; \
     fi; \
     \
-    # 최신 드라이버 버전 확인 (원래 사용하던 wget으로 복원)
-    CHROME_DRIVER_VERSION=$(wget -q -O - https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/LATEST_RELEASE_STABLE); \
+    # 임시 파일에서 버전 정보 읽기
+    CHROME_DRIVER_VERSION=$(cat /tmp/latest_version); \
     echo "Downloading ChromeDriver v${CHROME_DRIVER_VERSION} for ${TARGETARCH}..."; \
     \
-    # 드라이버 다운로드 및 설치 (원래 사용하던 wget으로 복원)
+    # 드라이버 다운로드 및 설치
     wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_DRIVER_VERSION}/${DRIVER_ARCH}/chromedriver-${DRIVER_ARCH}.zip" -O /tmp/chromedriver.zip; \
     unzip -q /tmp/chromedriver.zip -d /tmp; \
     mv "/tmp/chromedriver-${DRIVER_ARCH}/chromedriver" /usr/bin/chromedriver; \
