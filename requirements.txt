@@ -1,7 +1,5 @@
 fastapi
 uvicorn[standard]
-selenium
-webdriver-manager
 requests
 beautifulsoup4
 python-dotenv
