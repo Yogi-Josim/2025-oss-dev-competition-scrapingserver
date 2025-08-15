@@ -1,17 +1,13 @@
 import time
 from datetime import datetime, timedelta
-from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service
-# [추가] 명시적 대기를 위해 WebDriverWait와 EC를 다시 임포트합니다.
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from playwright.sync_api import sync_playwright, \
+  TimeoutError as PlaywrightTimeoutError
 import requests
 from bs4 import BeautifulSoup
 from app.core.config import settings
-from queue import Queue
-from threading import Thread
+
+
+# [수정] 병렬 처리에 사용되던 Queue와 Thread를 제거합니다.
 
 
 def _parse_time(time_str: str) -> datetime:
@@ -41,13 +37,11 @@ def _scrape_details_with_bs(page_source: str, time_cutoff: datetime,
 
     raw_content = f"{title}\n\n{content}"
 
-    comment_elements = soup.select(settings.COMMENT_LIST_SELECTOR)
-    comments = [el.text.strip() for el in comment_elements if el.text.strip()]
-
+    # 댓글 수집 로직을 완전히 제거합니다.
     return {
       "source_community": source_community, "source_url": current_url,
       "raw_content": raw_content, "crawled_at": datetime.now().isoformat(),
-      "comments": comments,
+      "comments": [],  # 항상 빈 리스트를 반환합니다.
       "post_time": post_time
     }
   except Exception as e:
@@ -55,79 +49,13 @@ def _scrape_details_with_bs(page_source: str, time_cutoff: datetime,
     return None
 
 
-# [수정] 각 스레드가 실행할 작업 함수입니다.
-# 최적화된 Selenium-only 방식으로 변경합니다.
-def worker(task_queue, results, time_cutoff):
-  options = webdriver.ChromeOptions()
-  options.add_argument('--headless=new')
-  options.add_argument('--no-sandbox')
-  options.add_argument('--disable-dev-shm-usage')
-  options.add_argument('--disable-gpu')
-  options.add_argument("--window-size=1920,1080")
-  options.add_argument("--disable-extensions")
-  options.add_argument("--disable-setuid-sandbox")
-
-  # [수정] JavaScript는 활성화 상태로 두고, 이미지와 CSS만 비활성화하여
-  # 댓글 로딩은 가능하게 하면서 서버 부하를 최소화합니다.
-  prefs = {
-    "profile.managed_default_content_settings.images": 2,
-    "profile.managed_default_content_settings.stylesheets": 2,
-  }
-  options.add_experimental_option("prefs", prefs)
-
-  options.binary_location = "/usr/bin/chromium"
-  service = Service(executable_path="/usr/bin/chromedriver")
-
-  driver = webdriver.Chrome(service=service, options=options)
-  driver.set_page_load_timeout(20)  # 타임아웃을 20초로 조절
-
-  while not task_queue.empty():
-    try:
-      link, gallery_id = task_queue.get(block=False)
-      driver.get(link)
-
-      # [수정] 댓글 영역이 로드될 때까지 최대 5초간 명시적으로 기다립니다.
-      # 이 부분이 댓글 누락을 방지하는 핵심 로직입니다.
-      WebDriverWait(driver, 5).until(
-          EC.presence_of_element_located((By.CSS_SELECTOR, ".cmt_box"))
-      )
-
-      page_source = driver.page_source
-
-      result = _scrape_details_with_bs(
-          page_source,
-          time_cutoff,
-          f"dcinside_{gallery_id}",
-          driver.current_url
-      )
-      if result:
-        results.append(result)
-    except TimeoutException:
-      # 댓글 로딩을 기다리다 타임아웃이 발생하면, 댓글이 없는 페이지로 간주하고 HTML을 바로 가져옵니다.
-      print(f"  [정보] 댓글 로딩 시간 초과 (댓글 없는 페이지 가능성): {link}")
-      try:
-        page_source = driver.page_source
-        result = _scrape_details_with_bs(
-            page_source, time_cutoff, f"dcinside_{gallery_id}",
-            driver.current_url
-        )
-        if result:
-          results.append(result)
-      except Exception as e_inner:
-        print(f"  [오류] 타임아웃 후 '{link}' 처리 중 오류 발생: {e_inner}")
-
-    except Exception as e:
-      print(f"  [오류] '{link}' 처리 중 오류 발생: {e}")
-    finally:
-      task_queue.task_done()
-
-  driver.quit()
-
-
+# [수정] 메인 스크래핑 함수를 단일 스레드로 간단하게 작동하도록 재설계합니다.
 def run_dcinside_scraper(crawl_hours: int):
   time_cutoff = datetime.now() - timedelta(hours=crawl_hours)
+  final_results = []
 
-  task_queue = Queue()
+  # 1. 모든 갤러리에서 스크래핑할 링크 목록을 먼저 수집합니다.
+  all_links_to_scrape = []
   for gallery in settings.GALLERIES_TO_SCRAPE:
     gallery_id, gallery_name = gallery["id"], gallery["name"]
     list_url = f"{settings.BASE_URL}/board/lists/?id={gallery_id}&exception_mode=recommend"
@@ -140,35 +68,47 @@ def run_dcinside_scraper(crawl_hours: int):
                     (tag := row.select_one(settings.POST_LINK_SELECTOR))]
 
       for link in post_links:
-        task_queue.put((link, gallery_id))
+        all_links_to_scrape.append((link, gallery_id))
     except Exception as e:
       print(f"  [오류] {gallery_name} 목록을 가져오는 중 오류 발생: {e}")
 
-  NUM_WORKERS = 4
-  final_results = []
-  threads = []
+  # 2. Playwright를 사용하여 수집된 링크들을 순서대로 처리합니다.
+  print(f"총 {len(all_links_to_scrape)}개의 게시물을 순차적으로 스크래핑합니다...")
+  with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
 
-  print(
-    f"총 {task_queue.qsize()}개의 게시물을 병렬로 스크래핑합니다 (최대 {NUM_WORKERS}개 동시 실행)...")
+    for link, gallery_id in all_links_to_scrape:
+      try:
+        # 'domcontentloaded'는 HTML 구조가 완성되는 시점을 의미하여 매우 빠릅니다.
+        page.goto(link, timeout=20000, wait_until='domcontentloaded')
+        page_source = page.content()
 
-  for _ in range(NUM_WORKERS):
-    t = Thread(target=worker, args=(task_queue, final_results, time_cutoff))
-    t.start()
-    threads.append(t)
-    time.sleep(1)
+        result = _scrape_details_with_bs(
+            page_source,
+            time_cutoff,
+            f"dcinside_{gallery_id}",
+            page.url
+        )
+        if result == "STOP":
+          # 한 갤러리에서 시간 범위를 벗어난 게시물이 나오면,
+          # 그 갤러리의 나머지 게시물은 건너뛰는 것이 효율적일 수 있습니다.
+          # 여기서는 간단하게 모든 링크를 확인합니다.
+          pass
+        elif result:
+          final_results.append(result)
+      except Exception as e:
+        print(f"  [오류] '{link}' 처리 중 오류 발생: {e}")
 
-  task_queue.join()
+    browser.close()
 
-  for t in threads:
-    t.join()
-
+  # 3. 모든 스크래핑이 끝난 후, 결과를 시간순으로 정렬합니다.
   print(f"[DEBUG] 스크래핑 완료. 결과를 시간순으로 정렬합니다...")
-  valid_results = [res for res in final_results if res != "STOP"]
-  valid_results.sort(key=lambda x: x.get('post_time', datetime.min),
+  final_results.sort(key=lambda x: x.get('post_time', datetime.min),
                      reverse=True)
 
-  for result in valid_results:
+  for result in final_results:
     result.pop('post_time', None)
 
-  print(f"[DEBUG] 정렬 완료. 총 {len(valid_results)}개의 유효한 게시물 발견.")
-  return valid_results
+  print(f"[DEBUG] 정렬 완료. 총 {len(final_results)}개의 유효한 게시물 발견.")
+  return final_results
