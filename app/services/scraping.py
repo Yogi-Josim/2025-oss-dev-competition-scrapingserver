@@ -1,8 +1,21 @@
 import time
 from datetime import datetime, timedelta
+# Selenium 관련 모든 임포트를 제거합니다.
 import requests
 from bs4 import BeautifulSoup
 from app.core.config import settings
+# [추가] 랜덤 지역 선택을 위해 random 라이브러리를 임포트합니다.
+import random
+
+# [수정] 반환할 지역 목록을 모두 '구' 단위로 변경합니다. 서울 지역구가 약 50%를 차지합니다.
+REGIONS = [
+  # 서울 (50%)
+  "서울 강남구", "서울 서초구", "서울 송파구", "서울 마포구", "서울 용산구",
+  "서울 종로구", "서울 영등포구", "서울 강서구", "서울 노원구", "서울 성동구",
+  # 기타 광역시의 구 (50%)
+  "부산 해운대구", "부산 진구", "인천 연수구", "인천 남동구", "대구 수성구",
+  "대구 중구", "대전 서구", "대전 유성구", "광주 서구", "울산 남구"
+]
 
 
 def _parse_time(time_str: str) -> datetime:
@@ -32,9 +45,14 @@ def _scrape_details_with_bs(page_source: str, time_cutoff: datetime,
 
     raw_content = f"{title}\n\n{content}"
 
+    # 댓글 관련 로직을 완전히 제거하고, comments 키를 반환하지 않습니다.
     return {
-      "source_community": source_community, "source_url": current_url,
-      "raw_content": raw_content, "crawled_at": datetime.now().isoformat(),
+      "source_community": source_community,
+      "source_url": current_url,
+      "raw_content": raw_content,
+      "crawled_at": datetime.now().isoformat(),
+      # [추가] 정의된 지역 목록에서 무작위로 하나를 선택하여 추가합니다.
+      "region": random.choice(REGIONS),
       "post_time": post_time
     }
   except Exception as e:
@@ -42,6 +60,7 @@ def _scrape_details_with_bs(page_source: str, time_cutoff: datetime,
     return None
 
 
+# 메인 스크래핑 함수를 requests만 사용하는 단순 순차 방식으로 변경합니다.
 def run_dcinside_scraper(crawl_hours: int):
   time_cutoff = datetime.now() - timedelta(hours=crawl_hours)
   final_results = []
