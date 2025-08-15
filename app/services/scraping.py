@@ -1,13 +1,12 @@
 import time
 from datetime import datetime, timedelta
-from playwright.sync_api import sync_playwright, \
-  TimeoutError as PlaywrightTimeoutError
+# [수정] Selenium 관련 모든 임포트를 제거합니다.
 import requests
 from bs4 import BeautifulSoup
 from app.core.config import settings
 
 
-# [수정] 병렬 처리에 사용되던 Queue와 Thread를 제거합니다.
+# [수정] 병렬 처리 관련 모든 임포트를 제거합니다.
 
 
 def _parse_time(time_str: str) -> datetime:
@@ -37,11 +36,11 @@ def _scrape_details_with_bs(page_source: str, time_cutoff: datetime,
 
     raw_content = f"{title}\n\n{content}"
 
-    # 댓글 수집 로직을 완전히 제거합니다.
+    # 댓글은 수집하지 않으므로 항상 빈 리스트를 반환합니다.
     return {
       "source_community": source_community, "source_url": current_url,
       "raw_content": raw_content, "crawled_at": datetime.now().isoformat(),
-      "comments": [],  # 항상 빈 리스트를 반환합니다.
+      "comments": [],
       "post_time": post_time
     }
   except Exception as e:
@@ -49,60 +48,57 @@ def _scrape_details_with_bs(page_source: str, time_cutoff: datetime,
     return None
 
 
-# [수정] 메인 스크래핑 함수를 단일 스레드로 간단하게 작동하도록 재설계합니다.
+# [수정] 메인 스크래핑 함수를 requests만 사용하는 단순 순차 방식으로 변경합니다.
 def run_dcinside_scraper(crawl_hours: int):
   time_cutoff = datetime.now() - timedelta(hours=crawl_hours)
   final_results = []
 
-  # 1. 모든 갤러리에서 스크래핑할 링크 목록을 먼저 수집합니다.
-  all_links_to_scrape = []
+  # 세션을 사용하여 TCP 연결을 재사용하므로 성능이 향상됩니다.
+  session = requests.Session()
+  session.headers.update({'User-Agent': 'Mozilla/5.0'})
+
   for gallery in settings.GALLERIES_TO_SCRAPE:
     gallery_id, gallery_name = gallery["id"], gallery["name"]
     list_url = f"{settings.BASE_URL}/board/lists/?id={gallery_id}&exception_mode=recommend"
     print(f"--- [ {gallery_name} ] 목록 확인 중 ---")
+
     try:
-      response = requests.get(list_url, headers={'User-Agent': 'Mozilla/5.0'})
+      # 1. 게시물 목록 페이지를 가져옵니다.
+      response = session.get(list_url)
+      response.raise_for_status()
       soup = BeautifulSoup(response.text, 'html.parser')
       post_links = [settings.BASE_URL + tag['href'] for row in
                     soup.select(settings.POST_ROW_SELECTOR) if
                     (tag := row.select_one(settings.POST_LINK_SELECTOR))]
 
+      # 2. 각 게시물 링크를 순회하며 내용을 가져옵니다.
       for link in post_links:
-        all_links_to_scrape.append((link, gallery_id))
-    except Exception as e:
+        try:
+          post_response = session.get(link, timeout=10)
+          post_response.raise_for_status()
+
+          result = _scrape_details_with_bs(
+              post_response.text,
+              time_cutoff,
+              f"dcinside_{gallery_id}",
+              link
+          )
+
+          if result == "STOP":
+            # 시간 범위를 벗어난 게시물이 나오면 해당 갤러리의 나머지 스크래핑을 중단합니다.
+            print(
+              f"  [정보] 시간 범위({crawl_hours}시간)를 벗어난 게시물에 도달하여 {gallery_name} 스크래핑을 중단합니다.")
+            break
+          elif result:
+            final_results.append(result)
+
+        except requests.RequestException as e:
+          print(f"  [경고] '{link}' 게시물을 가져오는 중 오류 발생: {e}")
+
+    except requests.RequestException as e:
       print(f"  [오류] {gallery_name} 목록을 가져오는 중 오류 발생: {e}")
 
-  # 2. Playwright를 사용하여 수집된 링크들을 순서대로 처리합니다.
-  print(f"총 {len(all_links_to_scrape)}개의 게시물을 순차적으로 스크래핑합니다...")
-  with sync_playwright() as p:
-    browser = p.chromium.launch(headless=True)
-    page = browser.new_page()
-
-    for link, gallery_id in all_links_to_scrape:
-      try:
-        # 'domcontentloaded'는 HTML 구조가 완성되는 시점을 의미하여 매우 빠릅니다.
-        page.goto(link, timeout=20000, wait_until='domcontentloaded')
-        page_source = page.content()
-
-        result = _scrape_details_with_bs(
-            page_source,
-            time_cutoff,
-            f"dcinside_{gallery_id}",
-            page.url
-        )
-        if result == "STOP":
-          # 한 갤러리에서 시간 범위를 벗어난 게시물이 나오면,
-          # 그 갤러리의 나머지 게시물은 건너뛰는 것이 효율적일 수 있습니다.
-          # 여기서는 간단하게 모든 링크를 확인합니다.
-          pass
-        elif result:
-          final_results.append(result)
-      except Exception as e:
-        print(f"  [오류] '{link}' 처리 중 오류 발생: {e}")
-
-    browser.close()
-
-  # 3. 모든 스크래핑이 끝난 후, 결과를 시간순으로 정렬합니다.
+  # 모든 스크래핑이 끝난 후, 결과를 시간순으로 정렬합니다.
   print(f"[DEBUG] 스크래핑 완료. 결과를 시간순으로 정렬합니다...")
   final_results.sort(key=lambda x: x.get('post_time', datetime.min),
                      reverse=True)
