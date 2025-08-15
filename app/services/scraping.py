@@ -114,10 +114,10 @@ def run_dcinside_scraper(crawl_hours: int):
       print(f"  [오류] {gallery_name} 목록을 가져오는 중 오류 발생: {e}")
 
   final_results = []
-  # [수정] 동시 작업 수를 10개에서 4개로 줄여 서버 과부하를 방지합니다.
+  # [수정] 동시 작업 수를 4개에서 2개로 줄여 서버 과부하를 방지합니다.
   # 이 값은 서버 사양에 따라 조절할 수 있습니다.
-  with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-    print(f"총 {len(all_links_to_scrape)}개의 게시물을 병렬로 스크래핑합니다 (최대 4개 동시 실행)...")
+  with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+    print(f"총 {len(all_links_to_scrape)}개의 게시물을 병렬로 스크래핑합니다 (최대 2개 동시 실행)...")
     results_iterator = executor.map(scrape_single_post, all_links_to_scrape)
 
     for result in results_iterator:
