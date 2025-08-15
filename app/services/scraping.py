@@ -51,47 +51,46 @@ def _scrape_details_with_bs(page_source: str, time_cutoff: datetime,
     return None
 
 
-# [수정] 각 스레드가 실행할 작업 함수를 Playwright 용으로 변경합니다.
-def worker(playwright, task_queue, results, time_cutoff):
-  # 각 스레드는 시작할 때 단 한 번만 브라우저를 생성합니다.
-  browser = playwright.chromium.launch(headless=True)
-  page = browser.new_page()
+# [수정] 각 스레드가 실행할 작업 함수입니다.
+# 이제 이 함수가 직접 Playwright 인스턴스를 관리합니다.
+def worker(task_queue, results, time_cutoff):
+  with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
 
-  while not task_queue.empty():
-    try:
-      link, gallery_id = task_queue.get(block=False)
-
-      # Playwright를 사용하여 페이지로 이동하고, 댓글이 로드될 때까지 기다립니다.
-      page.goto(link, timeout=20000)  # 20초 타임아웃
-      page.wait_for_selector(".cmt_box", timeout=5000)  # 댓글 영역 5초 대기
-
-      page_source = page.content()
-
-      result = _scrape_details_with_bs(
-          page_source,
-          time_cutoff,
-          f"dcinside_{gallery_id}",
-          page.url
-      )
-      if result:
-        results.append(result)
-    except PlaywrightTimeoutError:
-      # 댓글 로딩 타임아웃 시, 댓글 없는 페이지로 간주하고 바로 파싱
-      print(f"  [정보] 댓글 로딩 시간 초과 (댓글 없는 페이지 가능성): {link}")
+    while not task_queue.empty():
       try:
+        link, gallery_id = task_queue.get(block=False)
+
+        page.goto(link, timeout=20000)
+        page.wait_for_selector(".cmt_box", timeout=5000)
+
         page_source = page.content()
-        result = _scrape_details_with_bs(page_source, time_cutoff,
-                                         f"dcinside_{gallery_id}", page.url)
+
+        result = _scrape_details_with_bs(
+            page_source,
+            time_cutoff,
+            f"dcinside_{gallery_id}",
+            page.url
+        )
         if result:
           results.append(result)
-      except Exception as e_inner:
-        print(f"  [오류] 타임아웃 후 '{link}' 처리 중 오류 발생: {e_inner}")
-    except Exception as e:
-      print(f"  [오류] '{link}' 처리 중 오류 발생: {e}")
-    finally:
-      task_queue.task_done()
+      except PlaywrightTimeoutError:
+        print(f"  [정보] 댓글 로딩 시간 초과 (댓글 없는 페이지 가능성): {link}")
+        try:
+          page_source = page.content()
+          result = _scrape_details_with_bs(page_source, time_cutoff,
+                                           f"dcinside_{gallery_id}", page.url)
+          if result:
+            results.append(result)
+        except Exception as e_inner:
+          print(f"  [오류] 타임아웃 후 '{link}' 처리 중 오류 발생: {e_inner}")
+      except Exception as e:
+        print(f"  [오류] '{link}' 처리 중 오류 발생: {e}")
+      finally:
+        task_queue.task_done()
 
-  browser.close()
+    browser.close()
 
 
 # [수정] 메인 스크래핑 함수를 Playwright 생산자-소비자 모델로 재설계합니다.
@@ -122,19 +121,17 @@ def run_dcinside_scraper(crawl_hours: int):
   print(
     f"총 {task_queue.qsize()}개의 게시물을 병렬로 스크래핑합니다 (최대 {NUM_WORKERS}개 동시 실행)...")
 
-  # Playwright는 스레드마다 별도의 인스턴스가 필요합니다.
-  with sync_playwright() as p:
-    for _ in range(NUM_WORKERS):
-      # 각 스레드에 playwright 인스턴스를 전달합니다.
-      t = Thread(target=worker,
-                 args=(p, task_queue, final_results, time_cutoff))
-      t.start()
-      threads.append(t)
+  # [수정] 더 이상 메인 함수에서 Playwright를 시작하지 않습니다.
+  for _ in range(NUM_WORKERS):
+    # worker 함수에 더 이상 playwright 객체를 전달하지 않습니다.
+    t = Thread(target=worker, args=(task_queue, final_results, time_cutoff))
+    t.start()
+    threads.append(t)
 
-    task_queue.join()
+  task_queue.join()
 
-    for t in threads:
-      t.join()
+  for t in threads:
+    t.join()
 
   print(f"[DEBUG] 스크래핑 완료. 결과를 시간순으로 정렬합니다...")
   valid_results = [res for res in final_results if res != "STOP"]
