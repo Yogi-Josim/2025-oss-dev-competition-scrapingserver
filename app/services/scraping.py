@@ -1,12 +1,8 @@
 import time
 from datetime import datetime, timedelta
-# [수정] Selenium 관련 모든 임포트를 제거합니다.
 import requests
 from bs4 import BeautifulSoup
 from app.core.config import settings
-
-
-# [수정] 병렬 처리 관련 모든 임포트를 제거합니다.
 
 
 def _parse_time(time_str: str) -> datetime:
@@ -36,11 +32,9 @@ def _scrape_details_with_bs(page_source: str, time_cutoff: datetime,
 
     raw_content = f"{title}\n\n{content}"
 
-    # 댓글은 수집하지 않으므로 항상 빈 리스트를 반환합니다.
     return {
       "source_community": source_community, "source_url": current_url,
       "raw_content": raw_content, "crawled_at": datetime.now().isoformat(),
-      "comments": [],
       "post_time": post_time
     }
   except Exception as e:
@@ -48,7 +42,6 @@ def _scrape_details_with_bs(page_source: str, time_cutoff: datetime,
     return None
 
 
-# [수정] 메인 스크래핑 함수를 requests만 사용하는 단순 순차 방식으로 변경합니다.
 def run_dcinside_scraper(crawl_hours: int):
   time_cutoff = datetime.now() - timedelta(hours=crawl_hours)
   final_results = []
