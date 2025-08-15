@@ -7,7 +7,6 @@ from selenium.webdriver.chrome.service import Service
 import requests
 from bs4 import BeautifulSoup
 from app.core.config import settings
-# [수정] 병렬 처리를 위한 라이브러리 변경
 from queue import Queue
 from threading import Thread
 
@@ -53,10 +52,7 @@ def _scrape_details_with_bs(page_source: str, time_cutoff: datetime,
     return None
 
 
-# [수정] 각 스레드(소비자)가 실행할 작업 함수입니다.
-# 큐에서 작업을 가져와 처리하고, 결과는 results 리스트에 추가합니다.
 def worker(task_queue, results, time_cutoff):
-  # 각 스레드는 시작할 때 단 한 번만 브라우저를 생성합니다.
   options = webdriver.ChromeOptions()
   options.add_argument('--headless=new')
   options.add_argument('--no-sandbox')
@@ -65,11 +61,22 @@ def worker(task_queue, results, time_cutoff):
   options.add_argument("--window-size=1920,1080")
   options.add_argument("--disable-extensions")
   options.add_argument("--disable-setuid-sandbox")
+
+  # [수정] 이미지, JavaScript, CSS 로딩을 모두 비활성화하여 서버의 렌더링 부하를 최소화합니다.
+  # 이것이 속도 문제를 해결하는 가장 강력하고 확실한 방법입니다.
+  prefs = {
+    "profile.managed_default_content_settings.images": 2,
+    "profile.managed_default_content_settings.javascript": 2,
+    "profile.managed_default_content_settings.stylesheets": 2,
+  }
+  options.add_experimental_option("prefs", prefs)
+
   options.binary_location = "/usr/bin/chromium"
   service = Service(executable_path="/usr/bin/chromedriver")
 
   driver = webdriver.Chrome(service=service, options=options)
-  driver.set_page_load_timeout(30)
+  # 페이지 로드 타임아웃을 15초로 줄여, 응답 없는 페이지를 더 빨리 건너뜁니다.
+  driver.set_page_load_timeout(15)
 
   while not task_queue.empty():
     try:
@@ -90,18 +97,14 @@ def worker(task_queue, results, time_cutoff):
     except Exception as e:
       print(f"  [오류] '{link}' 처리 중 오류 발생: {e}")
     finally:
-      # 작업이 끝나면 큐에 완료 신호를 보냅니다.
       task_queue.task_done()
 
-  # 루프가 끝나면 브라우저를 종료합니다.
   driver.quit()
 
 
-# [수정] 메인 스크래핑 함수를 생산자-소비자 모델로 재설계합니다.
 def run_dcinside_scraper(crawl_hours: int):
   time_cutoff = datetime.now() - timedelta(hours=crawl_hours)
 
-  # 1. 생산자: 모든 갤러리에서 스크래핑할 링크를 수집하여 "업무 바구니"(큐)에 넣습니다.
   task_queue = Queue()
   for gallery in settings.GALLERIES_TO_SCRAPE:
     gallery_id, gallery_name = gallery["id"], gallery["name"]
@@ -119,8 +122,6 @@ def run_dcinside_scraper(crawl_hours: int):
     except Exception as e:
       print(f"  [오류] {gallery_name} 목록을 가져오는 중 오류 발생: {e}")
 
-  # 2. 소비자: 스레드(직원)들을 생성하고 작업을 시작시킵니다.
-  # NUM_WORKERS는 동시에 실행할 브라우저 수입니다.
   NUM_WORKERS = 4
   final_results = []
   threads = []
@@ -132,21 +133,18 @@ def run_dcinside_scraper(crawl_hours: int):
     t = Thread(target=worker, args=(task_queue, final_results, time_cutoff))
     t.start()
     threads.append(t)
+    time.sleep(1)
 
-  # 3. 모든 작업이 끝날 때까지 기다립니다.
   task_queue.join()
 
-  # 모든 스레드가 종료될 때까지 기다립니다.
   for t in threads:
     t.join()
 
-  # 4. 모든 스크래핑이 끝난 후, 결과를 시간순으로 정렬합니다.
   print(f"[DEBUG] 스크래핑 완료. 결과를 시간순으로 정렬합니다...")
   valid_results = [res for res in final_results if res != "STOP"]
   valid_results.sort(key=lambda x: x.get('post_time', datetime.min),
                      reverse=True)
 
-  # 최종 반환 전, 정렬에 사용된 'post_time' 키를 제거합니다.
   for result in valid_results:
     result.pop('post_time', None)
 
