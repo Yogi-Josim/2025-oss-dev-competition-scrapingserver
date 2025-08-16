@@ -7,7 +7,6 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.core.config import settings
-# [수정] 새로 만든 gpt_analyzer 모듈에서 함수를 임포트합니다.
 from app.utils.gpt_analyzer import extract_location_data_with_gpt
 
 
@@ -65,7 +64,8 @@ async def run_dcinside_scraper(crawl_hours: int):
 
   headers = {'User-Agent': 'Mozilla/5.0'}
 
-  async with httpx.AsyncClient(headers=headers, timeout=15) as aclient:
+  # [수정] 타임아웃을 30초로 늘려 ReadTimeout 가능성을 줄입니다.
+  async with httpx.AsyncClient(headers=headers, timeout=30.0) as aclient:
     for gallery in settings.GALLERIES_TO_SCRAPE:
       gallery_id, gallery_name = gallery["id"], gallery["name"]
       list_url = f"{settings.BASE_URL}/board/lists/?id={gallery_id}&exception_mode=recommend"
@@ -79,39 +79,50 @@ async def run_dcinside_scraper(crawl_hours: int):
                       soup.select(settings.POST_ROW_SELECTOR) if
                       (tag := row.select_one(settings.POST_LINK_SELECTOR))]
 
+        # [수정] 재시도 로직을 위한 설정값
+        MAX_RETRIES = 3
+        RETRY_DELAY = 2  # 초
+
         for link in post_links:
-          try:
-            post_response = await aclient.get(link)
-            post_response.raise_for_status()
+          for attempt in range(MAX_RETRIES):
+            try:
+              post_response = await aclient.get(link)
+              post_response.raise_for_status()
 
-            result_data = _scrape_post_details(
-                post_response.text,
-                time_cutoff,
-                f"dcinside_{gallery_id}",
-                link
-            )
+              result_data = _scrape_post_details(
+                  post_response.text,
+                  time_cutoff,
+                  f"dcinside_{gallery_id}",
+                  link
+              )
 
-            if result_data == "STOP":
-              print(
-                f"  [정보] 시간 범위({crawl_hours}시간)를 벗어난 게시물에 도달하여 {gallery_name} 스크래핑을 중단합니다.")
-              break
+              if result_data == "STOP":
+                print(
+                  f"  [정보] 시간 범위({crawl_hours}시간)를 벗어난 게시물에 도달하여 {gallery_name} 스크래핑을 중단합니다.")
+                break  # for link loop를 빠져나가기 위해 플래그 사용
 
-            if result_data:
-              # [수정] 외부 모듈의 함수를 호출하는 부분은 동일합니다.
-              location_info = await extract_location_data_with_gpt(
-                  result_data["raw_content"])
+              if result_data:
+                location_info = await extract_location_data_with_gpt(
+                    result_data["raw_content"])
 
-              result_data.update(location_info)
-              result_data["crawled_at"] = datetime.now().isoformat()
-              final_results.append(result_data)
+                result_data.update(location_info)
+                result_data["crawled_at"] = datetime.now().isoformat()
+                final_results.append(result_data)
 
-          except httpx.RequestError as e:
-            # [수정] repr(e)를 사용하여 더 상세한 오류 정보를 로깅합니다.
-            # 이렇게 하면 빈 오류 메시지 대신 실제 원인(예: Timeout, Connection error)을 볼 수 있습니다.
-            print(f"  [경고] '{link}' 게시물을 가져오는 중 오류 발생: {repr(e)}")
+              break  # 성공 시 재시도 루프 탈출
+
+            except httpx.RequestError as e:
+              if attempt < MAX_RETRIES - 1:
+                print(
+                  f"  [경고] '{link}' 요청 실패 ({repr(e)}). {RETRY_DELAY}초 후 재시도합니다... ({attempt + 1}/{MAX_RETRIES})")
+                await asyncio.sleep(RETRY_DELAY)
+              else:
+                print(f"  [오류] '{link}' 게시물을 가져오는 데 최종 실패했습니다: {repr(e)}")
+
+          if result_data == "STOP":
+            break  # 갤러리 스크래핑 중단
 
       except httpx.RequestError as e:
-        # [수정] 여기도 동일하게 상세 로깅으로 변경합니다.
         print(f"  [오류] {gallery_name} 목록을 가져오는 중 오류 발생: {repr(e)}")
 
   print(f"[DEBUG] 스크래핑 완료. 결과를 시간순으로 정렬합니다...")
