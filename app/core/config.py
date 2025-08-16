@@ -1,3 +1,5 @@
+# app/core/config.py
+
 from pydantic import BaseModel
 from typing import List, Dict
 
@@ -19,10 +21,7 @@ class Settings(BaseModel):
   TITLE_SELECTOR: str = "span.title_subject"
   CONTENT_SELECTOR: str = "div.writing_view_box"
   TIME_SELECTOR: str = "span.gall_date"
-  COMMENT_LIST_SELECTOR: str = ".cmt_list li"
-  COMMENT_USER_TEXT_SELECTOR: str = ".usertxt"
-  COMMENT_DCCON_SELECTOR: str = ".written_dccon"
-  COMMENT_AD_SELECTOR: str = ".dori-box"
+  # 사용하지 않는 댓글 관련 선택자 제거
 
 
 # 설정 객체 생성
