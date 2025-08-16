@@ -53,7 +53,7 @@ def _scrape_post_details(page_source: str, time_cutoff: datetime,
 def _parse_time(time_str: str) -> datetime:
   """시간 문자열을 datetime 객체로 변환합니다."""
   try:
-    return datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+    return datetime.strptime(time_str, "%Y-m-%d %H:%M:%S")
   except ValueError:
     return datetime.min
 
@@ -106,10 +106,13 @@ async def run_dcinside_scraper(crawl_hours: int):
               final_results.append(result_data)
 
           except httpx.RequestError as e:
-            print(f"  [경고] '{link}' 게시물을 가져오는 중 오류 발생: {e}")
+            # [수정] repr(e)를 사용하여 더 상세한 오류 정보를 로깅합니다.
+            # 이렇게 하면 빈 오류 메시지 대신 실제 원인(예: Timeout, Connection error)을 볼 수 있습니다.
+            print(f"  [경고] '{link}' 게시물을 가져오는 중 오류 발생: {repr(e)}")
 
       except httpx.RequestError as e:
-        print(f"  [오류] {gallery_name} 목록을 가져오는 중 오류 발생: {e}")
+        # [수정] 여기도 동일하게 상세 로깅으로 변경합니다.
+        print(f"  [오류] {gallery_name} 목록을 가져오는 중 오류 발생: {repr(e)}")
 
   print(f"[DEBUG] 스크래핑 완료. 결과를 시간순으로 정렬합니다...")
   final_results.sort(key=lambda x: x.get('post_time', datetime.min),
