@@ -6,5 +6,9 @@ services:
     container_name: scraper-api
     ports:
       - "8001:8000"
+    environment:
+      # 이 설정은 docker-compose를 실행하는 환경의 OPENAI_API_KEY 값을
+      # 컨테이너 내부의 OPENAI_API_KEY 변수로 전달합니다.
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     shm_size: '2gb'
     restart: always
