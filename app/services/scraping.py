@@ -14,6 +14,9 @@ def _scrape_post_details(page_source: str, time_cutoff: datetime,
     source_community: str, current_url: str):
   """
   BeautifulSoup를 사용하여 게시물 세부 정보를 파싱합니다.
+  - 파싱 실패 시: None 반환
+  - 시간 초과 시: "STOP" 반환
+  - 성공 시: 데이터 딕셔너리 반환
   """
   try:
     soup = BeautifulSoup(page_source, 'html.parser')
@@ -22,7 +25,14 @@ def _scrape_post_details(page_source: str, time_cutoff: datetime,
     post_time_str = time_element.get('title') if time_element else ''
     post_time = _parse_time(post_time_str)
 
-    if not post_time or post_time == datetime.min or post_time < time_cutoff:
+    # [수정] 1. 시간 파싱 실패를 먼저 처리합니다.
+    # 공지, 광고 등 시간이 없는 글은 건너뛰기 위해 None을 반환합니다.
+    if post_time == datetime.min:
+      print(f"  [정보] '{current_url}' 게시물의 시간을 파싱할 수 없어 건너뜁니다.")
+      return None
+
+    # [수정] 2. 파싱이 성공한 경우에만 시간 범위를 확인합니다.
+    if post_time < time_cutoff:
       return "STOP"
 
     title_element = soup.select_one(settings.TITLE_SELECTOR)
@@ -52,7 +62,7 @@ def _scrape_post_details(page_source: str, time_cutoff: datetime,
 def _parse_time(time_str: str) -> datetime:
   """시간 문자열을 datetime 객체로 변환합니다."""
   try:
-    return datetime.strptime(time_str, "%Y-m-%d %H:%M:%S")
+    return datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
   except ValueError:
     return datetime.min
 
@@ -64,12 +74,12 @@ async def run_dcinside_scraper(crawl_hours: int):
 
   headers = {'User-Agent': 'Mozilla/5.0'}
 
-  # [수정] 타임아웃을 30초로 늘려 ReadTimeout 가능성을 줄입니다.
   async with httpx.AsyncClient(headers=headers, timeout=30.0) as aclient:
     for gallery in settings.GALLERIES_TO_SCRAPE:
       gallery_id, gallery_name = gallery["id"], gallery["name"]
       list_url = f"{settings.BASE_URL}/board/lists/?id={gallery_id}&exception_mode=recommend"
       print(f"--- [ {gallery_name} ] 목록 확인 중 ---")
+      stop_gallery_scraping = False  # [수정] 갤러리 스크래핑 중단을 위한 플래그
 
       try:
         list_response = await aclient.get(list_url)
@@ -79,7 +89,6 @@ async def run_dcinside_scraper(crawl_hours: int):
                       soup.select(settings.POST_ROW_SELECTOR) if
                       (tag := row.select_one(settings.POST_LINK_SELECTOR))]
 
-        # [수정] 재시도 로직을 위한 설정값
         MAX_RETRIES = 3
         RETRY_DELAY = 2  # 초
 
@@ -96,20 +105,21 @@ async def run_dcinside_scraper(crawl_hours: int):
                   link
               )
 
-              if result_data == "STOP":
-                print(
-                  f"  [정보] 시간 범위({crawl_hours}시간)를 벗어난 게시물에 도달하여 {gallery_name} 스크래핑을 중단합니다.")
-                break  # for link loop를 빠져나가기 위해 플래그 사용
+              # [수정] 반환값에 따른 분기 처리 로직 개선
+              if result_data is None:  # Case 1: 파싱 실패 -> 이 게시물만 건너뜀
+                break  # 재시도 루프 탈출 후 다음 link로 이동
 
-              if result_data:
-                location_info = await extract_location_data_with_gpt(
-                    result_data["raw_content"])
+              if result_data == "STOP":  # Case 2: 시간 초과 -> 이 갤러리 스크래핑 중단
+                stop_gallery_scraping = True
+                break
 
-                result_data.update(location_info)
-                result_data["crawled_at"] = datetime.now().isoformat()
-                final_results.append(result_data)
-
-              break  # 성공 시 재시도 루프 탈출
+              # Case 3: 성공
+              location_info = await extract_location_data_with_gpt(
+                  result_data["raw_content"])
+              result_data.update(location_info)
+              result_data["crawled_at"] = datetime.now().isoformat()
+              final_results.append(result_data)
+              break
 
             except httpx.RequestError as e:
               if attempt < MAX_RETRIES - 1:
@@ -119,8 +129,10 @@ async def run_dcinside_scraper(crawl_hours: int):
               else:
                 print(f"  [오류] '{link}' 게시물을 가져오는 데 최종 실패했습니다: {repr(e)}")
 
-          if result_data == "STOP":
-            break  # 갤러리 스크래핑 중단
+          if stop_gallery_scraping:
+            print(
+              f"  [정보] 시간 범위({crawl_hours}시간)를 벗어난 게시물에 도달하여 {gallery_name} 스크래핑을 중단합니다.")
+            break
 
       except httpx.RequestError as e:
         print(f"  [오류] {gallery_name} 목록을 가져오는 중 오류 발생: {repr(e)}")
