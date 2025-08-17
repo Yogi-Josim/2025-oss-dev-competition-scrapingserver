@@ -19,8 +19,12 @@ def _parse_fmkorea_time(time_str: str) -> datetime:
     return datetime.min
 
 
-def _scrape_fmkorea_details(page_source: str, time_cutoff: datetime,
-    source_community: str, current_url: str):
+def _scrape_fmkorea_details(
+    page_source: str,
+    time_cutoff: datetime,
+    source_community: str,
+    current_url: str
+):
   try:
     soup = BeautifulSoup(page_source, 'html.parser')
     time_element = soup.select_one(fmkorea_settings.TIME_SELECTOR)
@@ -49,7 +53,11 @@ async def run_fmkorea_scraper(crawl_hours: int):
   candidate_posts = []
   headers = {'User-Agent': 'Mozilla/5.0'}
 
-  async with httpx.AsyncClient(headers=headers, timeout=30.0) as aclient:
+  async with httpx.AsyncClient(
+      headers=headers,
+      timeout=30.0,
+      follow_redirects=True
+  ) as aclient:
     for board in fmkorea_settings.BOARDS_TO_SCRAPE:
       board_id, board_name = board["id"], board["name"]
       list_url = f"{fmkorea_settings.BASE_URL}/index.php?mid={board_id}"
@@ -67,9 +75,12 @@ async def run_fmkorea_scraper(crawl_hours: int):
           try:
             post_response = await aclient.get(link)
             post_response.raise_for_status()
-            result_data = _scrape_fmkorea_details(post_response.text,
-                                                  time_cutoff,
-                                                  f"fmkorea_{board_id}", link)
+            result_data = _scrape_fmkorea_details(
+                post_response.text,
+                time_cutoff,
+                f"fmkorea_{board_id}",
+                link
+            )
 
             if result_data is None: continue
             if result_data == "STOP":
@@ -84,5 +95,4 @@ async def run_fmkorea_scraper(crawl_hours: int):
       except httpx.RequestError as e:
         print(f"  [오류] {board_name} 목록을 가져오는 중 오류 발생: {repr(e)}")
 
-  # [변경] 수집된 데이터를 공용 처리 모듈로 넘겨 결과를 반환합니다.
   return await process_and_analyze_posts(candidate_posts)
