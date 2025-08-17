@@ -60,7 +60,7 @@ JSON: {"region": "서울시 종로구", "place_name": "서울대학교병원", "
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": content},
           ],
-          temperature=0,
+          # [수정] gpt-5-mini 모델에서 지원하지 않는 temperature 파라미터를 제거합니다.
           response_format={"type": "json_object"}
       )
       response_content = response.choices[0].message.content
@@ -69,7 +69,6 @@ JSON: {"region": "서울시 종로구", "place_name": "서울대학교병원", "
 
     except openai.RateLimitError as e:
       if attempt < max_retries - 1:
-        # [수정] 어떤 내용으로 재시도하는지 알 수 있도록 로그를 더 상세하게 변경했습니다.
         content_snippet = content.replace('\n', ' ').strip()[:40]
         print(
           f"  [경고] OpenAI Rate Limit. '{content_snippet}...' 내용 재시도 ({attempt + 1}/{max_retries}). {delay}초 후 다시 시도합니다.")
