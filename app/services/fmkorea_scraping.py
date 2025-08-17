@@ -38,18 +38,18 @@ def _scrape_fmkorea_details(
 
     post_time_str = time_element.text.strip()
     post_time = _parse_fmkorea_time(post_time_str)
+    if post_time == datetime.min or post_time < time_cutoff:
+      return None if post_time == datetime.min else "STOP"
 
-    if post_time == datetime.min: return None
-    if post_time < time_cutoff: return "STOP"
-
-    content_elem = soup.select_one(fmkorea_settings.CONTENT_SELECTOR)
-    content = content_elem.get_text(" ", strip=True) if content_elem else None
+    title = soup.select_one(fmkorea_settings.TITLE_SELECTOR).text.strip()
+    content_el = soup.select_one(fmkorea_settings.CONTENT_SELECTOR)
+    content = content_el.get_text(strip=True) if content_el else ""
 
     return {
       "source_community": source_community,
       "source_url": current_url,
       "raw_content": f"{title}\n\n{content}",
-      "post_time": post_time
+      "post_time": post_time,
     }
   except Exception as e:
     print(f"  [오류] Fmkorea 파싱 중 오류: {e}")
@@ -80,18 +80,13 @@ async def run_fmkorea_scraper(crawl_hours: int, crawl_minutes: int):
       board_name = board["name"]
       category_id = board.get("category")
       order_type = board.get("order_type")
-      list_style = board.get("listStyle")
-      sort_index = board.get("sort_index")
 
       list_url = f"{fmkorea_settings.BASE_URL}/index.php?mid={board_id}"
       if category_id:
         list_url += f"&category={category_id}"
       if order_type:
         list_url += f"&order_type={order_type}"
-      if sort_index:
-        list_url += f"&sort_index={sort_index}"
-      if list_style:
-        list_url += f"&listStyle={list_style}"
+      list_url += "&sort_index=regdate&listStyle=webzine"
 
       print(f"--- [ 에펨코리아 - {board_name} ] 게시물 수집 중 (URL: {list_url}) ---")
       stop_board_scraping = False
@@ -100,12 +95,17 @@ async def run_fmkorea_scraper(crawl_hours: int, crawl_minutes: int):
         list_response = await aclient.get(list_url)
         list_response.raise_for_status()
         soup = BeautifulSoup(list_response.text, 'html.parser')
-        post_blocks = soup.select(fmkorea_settings.POST_ROW_SELECTOR)
-        post_links = []
-        for block in post_blocks:
-          link_elem = block.select_one(fmkorea_settings.POST_LINK_SELECTOR)
-          if link_elem and link_elem.has_attr("href"):
-            post_links.append(fmkorea_settings.BASE_URL + link_elem["href"])
+
+        post_rows = soup.select(fmkorea_settings.POST_ROW_SELECTOR)
+        if not post_rows:
+          print("  [DEBUG] 게시물 선택자와 일치하는 항목 없음.")
+          continue
+
+        post_links = [fmkorea_settings.BASE_URL +
+                      row.select_one(fmkorea_settings.POST_LINK_SELECTOR)[
+                        'href']
+                      for row in post_rows if
+                      row.select_one(fmkorea_settings.POST_LINK_SELECTOR)]
 
         for link in post_links:
           try:
