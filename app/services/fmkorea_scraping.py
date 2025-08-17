@@ -51,7 +51,11 @@ def _scrape_fmkorea_details(
 async def run_fmkorea_scraper(crawl_hours: int):
   time_cutoff = datetime.now() - timedelta(hours=crawl_hours)
   candidate_posts = []
-  headers = {'User-Agent': 'Mozilla/5.0'}
+  headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7'
+  }
 
   async with httpx.AsyncClient(
       headers=headers,
@@ -95,12 +99,15 @@ async def run_fmkorea_scraper(crawl_hours: int):
             if result_data == "STOP":
               stop_board_scraping = True
               break
+
             candidate_posts.append(result_data)
+
           except httpx.RequestError as e:
             print(f"  [경고] '{link}' 게시물 수집 중 오류: {repr(e)}")
 
         if stop_board_scraping:
           print(f"  [정보] 시간 범위를 벗어난 게시물에 도달하여 {board_name} 수집을 중단합니다.")
+
       except httpx.RequestError as e:
         print(f"  [오류] {board_name} 목록을 가져오는 중 오류 발생: {repr(e)}")
 
