@@ -1,10 +1,9 @@
-# app/core/dcinside_config.py
+# app/core/configs/dcinside_config.py
 
 from pydantic import BaseModel
 from typing import List, Dict
 
-
-class Settings(BaseModel):
+class DcinsideSettings(BaseModel):
   BASE_URL: str = "https://gall.dcinside.com"
 
   GALLERIES_TO_SCRAPE: List[Dict[str, str]] = [
@@ -21,8 +20,5 @@ class Settings(BaseModel):
   TITLE_SELECTOR: str = "span.title_subject"
   CONTENT_SELECTOR: str = "div.writing_view_box"
   TIME_SELECTOR: str = "span.gall_date"
-  # 사용하지 않는 댓글 관련 선택자 제거
 
-
-# 설정 객체 생성
-settings = Settings()
+dcinside_settings = DcinsideSettings()
