@@ -1,5 +1,3 @@
-# app/core/configs/dcinside_config.py
-
 from pydantic import BaseModel
 from typing import List, Dict
 
@@ -14,7 +12,6 @@ class DcinsideSettings(BaseModel):
     {"id": "dcbest", "name": "실시간 베스트"},
   ]
 
-  # CSS 선택자
   POST_ROW_SELECTOR: str = "tr.us-post"
   POST_LINK_SELECTOR: str = "td.gall_tit a:not(.reply_numbox)"
   TITLE_SELECTOR: str = "span.title_subject"
