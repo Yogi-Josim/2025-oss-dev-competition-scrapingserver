@@ -19,12 +19,8 @@ def _parse_fmkorea_time(time_str: str) -> datetime:
     return datetime.min
 
 
-def _scrape_fmkorea_details(
-    page_source: str,
-    time_cutoff: datetime,
-    source_community: str,
-    current_url: str
-):
+def _scrape_fmkorea_details(page_source: str, time_cutoff: datetime,
+    source_community: str, current_url: str):
   try:
     soup = BeautifulSoup(page_source, 'html.parser')
     time_element = soup.select_one(fmkorea_settings.TIME_SELECTOR)
@@ -54,14 +50,12 @@ async def run_fmkorea_scraper(crawl_hours: int):
   headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-    'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7'
+    'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Referer': fmkorea_settings.BASE_URL  # 요청의 출처를 명시하여 정상적인 접근처럼 보이게 합니다.
   }
 
-  async with httpx.AsyncClient(
-      headers=headers,
-      timeout=30.0,
-      follow_redirects=True
-  ) as aclient:
+  async with httpx.AsyncClient(headers=headers, timeout=30.0,
+                               follow_redirects=True) as aclient:
     for board in fmkorea_settings.BOARDS_TO_SCRAPE:
       board_id = board["id"]
       board_name = board["name"]
@@ -88,12 +82,9 @@ async def run_fmkorea_scraper(crawl_hours: int):
           try:
             post_response = await aclient.get(link)
             post_response.raise_for_status()
-            result_data = _scrape_fmkorea_details(
-                post_response.text,
-                time_cutoff,
-                f"fmkorea_{board_id}",
-                link
-            )
+            result_data = _scrape_fmkorea_details(post_response.text,
+                                                  time_cutoff,
+                                                  f"fmkorea_{board_id}", link)
 
             if result_data is None: continue
             if result_data == "STOP":
