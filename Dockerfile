@@ -1,16 +1,17 @@
-FROM python:3.10-bullseye
-
-RUN apt-get update && apt-get install -y \
-    libglib2.0-0 \
-    --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV PYTHONUNBUFFERED=1
+FROM python:3.10-bullseye AS builder
 
 WORKDIR /app
-
 COPY requirements.txt .
+
 RUN pip install --no-cache-dir -r requirements.txt
+
+FROM python:3.10-bullseye AS final
+
+ENV PYTHONUNBUFFERED=1
+WORKDIR /app
+
+COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
 COPY ./app /app/app
 
