@@ -1,11 +1,16 @@
 # app/services/fmkorea_scraping.py
 
+import re
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import WebDriverException
+from selenium.common.exceptions import WebDriverException, TimeoutException
+# [추가] 똑똑하게 기다리는 기능을 위해 Selenium의 WebDriverWait를 임포트합니다.
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 
 from app.core.configs.fmkorea_config import fmkorea_settings
 from app.services.scraping_processor import process_and_analyze_posts
@@ -22,9 +27,6 @@ def _create_driver():
     "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
 
   try:
-    # [핵심 수정] Dockerfile에서 apt-get으로 설치한 크롬 드라이버의
-    # 정확한 경로('/usr/bin/chromedriver')를 직접 지정해줍니다.
-    # 이렇게 하면 Selenium이 드라이버를 찾지 못하는 문제를 원천적으로 해결합니다.
     service = Service(executable_path='/usr/bin/chromedriver')
     driver = webdriver.Chrome(service=service, options=chrome_options)
     return driver
@@ -34,16 +36,34 @@ def _create_driver():
 
 
 def _parse_fmkorea_time(time_str: str) -> datetime:
+  """
+  [핵심 수정] 상세 페이지의 절대적인 시간 형식만 처리하도록 함수를 간소화합니다.
+  """
+  time_str = time_str.strip()
+
+  # Case 1: "YYYY.MM.DD HH:MM" (가장 흔한 형식)
   try:
-    if ":" in time_str and "." not in time_str:
-      return datetime.strptime(
-        f"{datetime.now().strftime('%Y.%m.%d')} {time_str}", "%Y.%m.%d %H:%M")
-    elif "." in time_str and ":" not in time_str:
-      return datetime.strptime(time_str, "%Y.%m.%d")
-    else:
-      return datetime.strptime(time_str, "%Y.%m.%d %H:%M")
+    return datetime.strptime(time_str, '%Y.%m.%d %H:%M')
   except ValueError:
-    return datetime.min
+    pass
+
+  # Case 2: "HH:MM" (오늘 날짜로 처리)
+  try:
+    now = datetime.now()
+    parsed_time = datetime.strptime(time_str, '%H:%M')
+    return now.replace(hour=parsed_time.hour, minute=parsed_time.minute,
+                       second=0, microsecond=0)
+  except ValueError:
+    pass
+
+  # Case 3: "YYYY.MM.DD"
+  try:
+    return datetime.strptime(time_str, '%Y.%m.%d')
+  except ValueError:
+    pass
+
+  # 모든 형식에 맞지 않으면 실패로 처리
+  return datetime.min
 
 
 def _scrape_fmkorea_details(page_source: str, time_cutoff: datetime,
@@ -51,11 +71,20 @@ def _scrape_fmkorea_details(page_source: str, time_cutoff: datetime,
   try:
     soup = BeautifulSoup(page_source, 'html.parser')
     time_element = soup.select_one(fmkorea_settings.TIME_SELECTOR)
-    post_time_str = time_element.text.strip() if time_element else ''
+
+    if not time_element:
+      print(f"  [정보] 시간 태그를 찾을 수 없어 건너뜁니다: {current_url}")
+      return None
+
+    post_time_str = time_element.text.strip()
     post_time = _parse_fmkorea_time(post_time_str)
 
-    if post_time == datetime.min: return None
-    if post_time < time_cutoff: return "STOP"
+    if post_time == datetime.min:
+      print(f"  [정보] 시간 형식('{post_time_str}')을 파악할 수 없어 건너뜁니다: {current_url}")
+      return None
+
+    if post_time < time_cutoff:
+      return "STOP"
 
     title = soup.select_one(fmkorea_settings.TITLE_SELECTOR).text.strip()
     content = soup.select_one(fmkorea_settings.CONTENT_SELECTOR).text.strip()
@@ -86,6 +115,15 @@ def run_fmkorea_scraper(crawl_hours: int):
       print(f"--- [ 에펨코리아 - {board_name} ] 게시물 수집 중 (URL: {list_url}) ---")
       driver.get(list_url)
 
+      # [핵심 수정] 게시물 목록(tr)이 나타날 때까지 최대 10초간 기다립니다.
+      try:
+        wait = WebDriverWait(driver, 10)
+        wait.until(EC.presence_of_element_located(
+            (By.CSS_SELECTOR, fmkorea_settings.POST_ROW_SELECTOR)))
+      except TimeoutException:
+        print(f"  [오류] {board_name} 목록을 불러오는 데 시간이 너무 오래 걸립니다.")
+        continue  # 다음 게시판으로 넘어감
+
       soup = BeautifulSoup(driver.page_source, 'html.parser')
       post_links = [fmkorea_settings.BASE_URL + tag['href'] for tag in
                     soup.select(fmkorea_settings.POST_LINK_SELECTOR)]
@@ -104,7 +142,8 @@ def run_fmkorea_scraper(crawl_hours: int):
         except Exception as e:
           print(f"  [경고] '{link}' 게시물 수집 중 오류: {e}")
   finally:
-    driver.quit()
+    if driver:
+      driver.quit()
 
   import asyncio
   return asyncio.run(process_and_analyze_posts(candidate_posts))
