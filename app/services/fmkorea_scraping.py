@@ -59,9 +59,18 @@ async def run_fmkorea_scraper(crawl_hours: int):
       follow_redirects=True
   ) as aclient:
     for board in fmkorea_settings.BOARDS_TO_SCRAPE:
-      board_id, board_name = board["id"], board["name"]
+      board_id = board["id"]
+      board_name = board["name"]
+      category_id = board.get("category")
+      order_type = board.get("order_type")
+
       list_url = f"{fmkorea_settings.BASE_URL}/index.php?mid={board_id}"
-      print(f"--- [ 에펨코리아 - {board_name} ] 게시물 수집 중 ---")
+      if category_id:
+        list_url += f"&category={category_id}"
+      if order_type:
+        list_url += f"&order_type={order_type}"
+
+      print(f"--- [ 에펨코리아 - {board_name} ] 게시물 수집 중 (URL: {list_url}) ---")
       stop_board_scraping = False
 
       try:

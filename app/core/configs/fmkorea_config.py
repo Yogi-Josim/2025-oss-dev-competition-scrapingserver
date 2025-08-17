@@ -1,5 +1,3 @@
-# app/core/configs/fmkorea_config.py
-
 from pydantic import BaseModel
 from typing import List, Dict
 
@@ -7,8 +5,7 @@ class FmkoreaSettings(BaseModel):
     BASE_URL: str = "https://www.fmkorea.com"
 
     BOARDS_TO_SCRAPE: List[Dict[str, str]] = [
-        # [수정] 'category' 키를 추가하여 스크래핑할 게시판을 더 구체적으로 지정합니다.
-        {"id": "humor", "category": "1899663", "name": "유머/이슈 게시판"},
+        {"id": "humor", "category": "1899663", "order_type": "desc", "name": "유머/이슈 게시판"},
     ]
 
     # CSS 선택자
