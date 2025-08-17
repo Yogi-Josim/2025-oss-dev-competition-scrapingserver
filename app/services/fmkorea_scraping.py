@@ -22,9 +22,11 @@ def _create_driver():
     "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
 
   try:
-    # [수정] Dockerfile에서 시스템 경로에 드라이버를 설치했으므로,
-    # 더 이상 executable_path를 직접 지정할 필요가 없습니다. Selenium이 자동으로 찾습니다.
-    driver = webdriver.Chrome(options=chrome_options)
+    # [핵심 수정] Dockerfile에서 apt-get으로 설치한 크롬 드라이버의
+    # 정확한 경로('/usr/bin/chromedriver')를 직접 지정해줍니다.
+    # 이렇게 하면 Selenium이 드라이버를 찾지 못하는 문제를 원천적으로 해결합니다.
+    service = Service(executable_path='/usr/bin/chromedriver')
+    driver = webdriver.Chrome(service=service, options=chrome_options)
     return driver
   except WebDriverException as e:
     print(f"  [오류] Selenium WebDriver 생성 실패: {e}")
