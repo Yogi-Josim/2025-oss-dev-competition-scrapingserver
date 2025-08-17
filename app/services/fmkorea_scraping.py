@@ -80,12 +80,18 @@ async def run_fmkorea_scraper(crawl_hours: int, crawl_minutes: int):
       board_name = board["name"]
       category_id = board.get("category")
       order_type = board.get("order_type")
+      list_style = board.get("listStyle")
+      sort_index = board.get("sort_index")
 
       list_url = f"{fmkorea_settings.BASE_URL}/index.php?mid={board_id}"
       if category_id:
         list_url += f"&category={category_id}"
       if order_type:
         list_url += f"&order_type={order_type}"
+      if sort_index:
+        list_url += f"&sort_index={sort_index}"
+      if list_style:
+        list_url += f"&listStyle={list_style}"
 
       print(f"--- [ 에펨코리아 - {board_name} ] 게시물 수집 중 (URL: {list_url}) ---")
       stop_board_scraping = False

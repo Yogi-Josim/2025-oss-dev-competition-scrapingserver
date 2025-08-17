@@ -9,6 +9,7 @@ class FmkoreaSettings(BaseModel):
       "id": "humor",
       "category": "1899663",
       "order_type": "desc",
+      "sort_index": "regdate",
       "listStyle": "webzine",
       "name": "유머/이슈 게시판",
     },
