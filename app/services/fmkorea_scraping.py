@@ -7,14 +7,20 @@ from app.services.scraping_processor import process_and_analyze_posts
 
 
 def _parse_fmkorea_time(time_str: str) -> datetime:
+  time_str = time_str.strip()
   try:
-    if ":" in time_str and "." not in time_str:
-      today_str = datetime.now().strftime("%Y.%m.%d")
-      return datetime.strptime(f"{today_str} {time_str}", "%Y.%m.%d %H:%M")
-    elif "." in time_str and ":" not in time_str:
-      return datetime.strptime(time_str, "%Y.%m.%d")
-    else:
-      return datetime.strptime(time_str, "%Y.%m.%d %H:%M")
+    return datetime.strptime(time_str, '%Y.%m.%d %H:%M')
+  except ValueError:
+    pass
+  try:
+    now = datetime.now()
+    parsed_time = datetime.strptime(time_str, '%H:%M')
+    return now.replace(hour=parsed_time.hour, minute=parsed_time.minute,
+                       second=0, microsecond=0)
+  except ValueError:
+    pass
+  try:
+    return datetime.strptime(time_str, '%Y.%m.%d')
   except ValueError:
     return datetime.min
 
@@ -28,7 +34,9 @@ def _scrape_fmkorea_details(
   try:
     soup = BeautifulSoup(page_source, 'html.parser')
     time_element = soup.select_one(fmkorea_settings.TIME_SELECTOR)
-    post_time_str = time_element.text.strip() if time_element else ''
+    if not time_element: return None
+
+    post_time_str = time_element.text.strip()
     post_time = _parse_fmkorea_time(post_time_str)
 
     if post_time == datetime.min: return None
@@ -48,8 +56,12 @@ def _scrape_fmkorea_details(
     return None
 
 
-async def run_fmkorea_scraper(crawl_hours: int):
-  time_cutoff = datetime.now() - timedelta(hours=crawl_hours)
+async def run_fmkorea_scraper(crawl_hours: int, crawl_minutes: int):
+  if crawl_hours == 0 and crawl_minutes == 0:
+    crawl_hours = 1
+
+  time_cutoff = datetime.now() - timedelta(hours=crawl_hours,
+                                           minutes=crawl_minutes)
   candidate_posts = []
   headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',

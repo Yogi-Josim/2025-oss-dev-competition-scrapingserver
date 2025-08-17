@@ -42,8 +42,12 @@ def _scrape_dcinside_details(
     return None
 
 
-async def run_dcinside_scraper(crawl_hours: int):
-  time_cutoff = datetime.now() - timedelta(hours=crawl_hours)
+async def run_dcinside_scraper(crawl_hours: int, crawl_minutes: int):
+  if crawl_hours == 0 and crawl_minutes == 0:
+    crawl_hours = 24
+
+  time_cutoff = datetime.now() - timedelta(hours=crawl_hours,
+                                           minutes=crawl_minutes)
   candidate_posts = []
   headers = {'User-Agent': 'Mozilla/5.0'}
 
