@@ -37,13 +37,20 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# 헤드리스 크롬 실행에 필요한 최소한의 라이브러리만 설치합니다.
+# [수정] 헤드리스 크롬 실행에 필요한 라이브러리 목록을 최신화하고,
+# 더 이상 사용되지 않는 'libgconf-2-4'를 제거했습니다.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    libnss3 libgconf-2-4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libgtk-3-0 libgbm1 libasound2 \
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libgtk-3-0 \
+    libgbm1 \
+    libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
-# [핵심 수정] Builder 스테이지에서 준비된 파일을 복사할 때, 와일드카드(*)를 사용하여
+# Builder 스테이지에서 준비된 파일을 복사할 때, 와일드카드(*)를 사용하여
 # arm64와 amd64 환경 모두에서 올바른 폴더를 찾도록 수정했습니다.
 COPY --from=builder /chrome-*/chrome /usr/local/bin/
 COPY --from=builder /chromedriver-*/chromedriver /usr/local/bin/
