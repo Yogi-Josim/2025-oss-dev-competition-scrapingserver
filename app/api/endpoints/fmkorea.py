@@ -3,13 +3,15 @@ from app.services.fmkorea_scraping import run_fmkorea_scraper
 
 router = APIRouter()
 
+# [변경] 비동기(async)가 아닌 일반 함수(def)로 변경합니다.
 @router.get("/fmkorea")
-async def scrape_fmkorea_endpoint(hours: int = 24):
+def scrape_fmkorea_endpoint(hours: int = 24):
     """
     에펨코리아 게시판을 스크래핑하여 결과를 JSON으로 반환합니다.
     - hours: 현재로부터 몇 시간 전의 글까지 스크래핑할지 결정 (기본값: 24)
     """
     print(f"'/scrape/fmkorea' 요청 수신. {hours}시간 내의 글을 스크래핑합니다.")
-    results = await run_fmkorea_scraper(crawl_hours=hours)
+    # [변경] await 키워드를 제거합니다.
+    results = run_fmkorea_scraper(crawl_hours=hours)
     print(f"스크래핑 완료. 총 {len(results)}개의 게시물 반환.")
     return {"status": "success", "count": len(results), "data": results}
