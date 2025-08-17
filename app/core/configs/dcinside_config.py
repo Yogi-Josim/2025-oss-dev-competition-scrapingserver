@@ -1,4 +1,4 @@
-# app/core/config.py
+# app/core/dcinside_config.py
 
 from pydantic import BaseModel
 from typing import List, Dict

@@ -1,12 +1,10 @@
-# app/services/scraping.py
-
 import asyncio
 from datetime import datetime, timedelta
 
 import httpx
 from bs4 import BeautifulSoup
 
-from app.core.config import settings
+from app.core.configs.dcinside_config import settings
 from app.utils.gpt_analyzer import extract_location_data_with_gpt
 
 
