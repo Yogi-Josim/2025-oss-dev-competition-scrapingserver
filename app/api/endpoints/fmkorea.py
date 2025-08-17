@@ -4,8 +4,8 @@ from app.services.fmkorea_scraping import run_fmkorea_scraper
 router = APIRouter()
 
 @router.get("/fmkorea")
-async def scrape_fmkorea_endpoint(hours: int = 1):
-    print(f"'/scrape/fmkorea' 요청 수신. {hours}시간 내의 글을 스크래핑합니다.")
-    results = await run_fmkorea_scraper(crawl_hours=hours)
+async def scrape_fmkorea_endpoint(hours: int = 1, minutes: int = 0):
+    print(f"'/scrape/fmkorea' 요청 수신. {hours}시간 {minutes}분 내의 글을 스크래핑합니다.")
+    results = await run_fmkorea_scraper(crawl_hours=hours, crawl_minutes=minutes)
     print(f"스크래핑 완료. 총 {len(results)}개의 게시물 반환.")
     return {"status": "success", "count": len(results), "data": results}
