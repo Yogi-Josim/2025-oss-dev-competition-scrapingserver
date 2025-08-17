@@ -42,8 +42,8 @@ def _scrape_fmkorea_details(
     if post_time == datetime.min: return None
     if post_time < time_cutoff: return "STOP"
 
-    title = soup.select_one(fmkorea_settings.TITLE_SELECTOR).text.strip()
-    content = soup.select_one(fmkorea_settings.CONTENT_SELECTOR).text.strip()
+    content_elem = soup.select_one(fmkorea_settings.CONTENT_SELECTOR)
+    content = content_elem.get_text(" ", strip=True) if content_elem else None
 
     return {
       "source_community": source_community,
@@ -67,7 +67,7 @@ async def run_fmkorea_scraper(crawl_hours: int, crawl_minutes: int):
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
     'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-    'Referer': fmkorea_settings.BASE_URL  # 요청의 출처를 명시하여 정상적인 접근처럼 보이게 합니다.
+    'Referer': fmkorea_settings.BASE_URL
   }
 
   async with httpx.AsyncClient(
@@ -94,8 +94,12 @@ async def run_fmkorea_scraper(crawl_hours: int, crawl_minutes: int):
         list_response = await aclient.get(list_url)
         list_response.raise_for_status()
         soup = BeautifulSoup(list_response.text, 'html.parser')
-        post_links = [fmkorea_settings.BASE_URL + tag['href'] for tag in
-                      soup.select(fmkorea_settings.POST_LINK_SELECTOR)]
+        post_blocks = soup.select(fmkorea_settings.POST_ROW_SELECTOR)
+        post_links = []
+        for block in post_blocks:
+          link_elem = block.select_one(fmkorea_settings.POST_LINK_SELECTOR)
+          if link_elem and link_elem.has_attr("href"):
+            post_links.append(fmkorea_settings.BASE_URL + link_elem["href"])
 
         for link in post_links:
           try:
