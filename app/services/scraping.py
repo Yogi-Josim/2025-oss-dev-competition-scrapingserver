@@ -25,13 +25,9 @@ def _scrape_post_details(page_source: str, time_cutoff: datetime,
     post_time_str = time_element.get('title') if time_element else ''
     post_time = _parse_time(post_time_str)
 
-    # [수정] 1. 시간 파싱 실패를 먼저 처리합니다.
-    # 공지, 광고 등 시간이 없는 글은 건너뛰기 위해 None을 반환합니다.
     if post_time == datetime.min:
-      print(f"  [정보] '{current_url}' 게시물의 시간을 파싱할 수 없어 건너뜁니다.")
       return None
 
-    # [수정] 2. 파싱이 성공한 경우에만 시간 범위를 확인합니다.
     if post_time < time_cutoff:
       return "STOP"
 
@@ -47,11 +43,6 @@ def _scrape_post_details(page_source: str, time_cutoff: datetime,
       "source_community": source_community,
       "source_url": current_url,
       "raw_content": raw_content,
-      "crawled_at": "",
-      "region": "",
-      "place_name": "",
-      "latitude": None,
-      "longitude": None,
       "post_time": post_time
     }
   except Exception as e:
@@ -68,18 +59,21 @@ def _parse_time(time_str: str) -> datetime:
 
 
 async def run_dcinside_scraper(crawl_hours: int):
-  """DCinside 갤러리를 비동기적으로 스크래핑하고 GPT로 지역 정보를 분석합니다."""
+  """
+  DCinside 갤러리를 스크래핑하고, 수집된 모든 게시물을 GPT로 분석합니다.
+  """
   time_cutoff = datetime.now() - timedelta(hours=crawl_hours)
-  final_results = []
+  candidate_posts = []
 
-  headers = {'User-Agent': 'Mozilla/5.0'}
+  headers = {'User-Agent': 'Mozilla/_5.0'}
 
   async with httpx.AsyncClient(headers=headers, timeout=30.0) as aclient:
+    # 1단계: 모든 갤러리를 순회하며 시간 범위 내의 게시물 후보들을 수집
     for gallery in settings.GALLERIES_TO_SCRAPE:
       gallery_id, gallery_name = gallery["id"], gallery["name"]
       list_url = f"{settings.BASE_URL}/board/lists/?id={gallery_id}&exception_mode=recommend"
-      print(f"--- [ {gallery_name} ] 목록 확인 중 ---")
-      stop_gallery_scraping = False  # [수정] 갤러리 스크래핑 중단을 위한 플래그
+      print(f"--- [ {gallery_name} ] 게시물 수집 중 ---")
+      stop_gallery_scraping = False
 
       try:
         list_response = await aclient.get(list_url)
@@ -89,60 +83,59 @@ async def run_dcinside_scraper(crawl_hours: int):
                       soup.select(settings.POST_ROW_SELECTOR) if
                       (tag := row.select_one(settings.POST_LINK_SELECTOR))]
 
-        MAX_RETRIES = 3
-        RETRY_DELAY = 2  # 초
-
         for link in post_links:
-          for attempt in range(MAX_RETRIES):
-            try:
-              post_response = await aclient.get(link)
-              post_response.raise_for_status()
+          try:
+            post_response = await aclient.get(link)
+            post_response.raise_for_status()
 
-              result_data = _scrape_post_details(
-                  post_response.text,
-                  time_cutoff,
-                  f"dcinside_{gallery_id}",
-                  link
-              )
+            result_data = _scrape_post_details(
+                post_response.text,
+                time_cutoff,
+                f"dcinside_{gallery_id}",
+                link
+            )
 
-              # [수정] 반환값에 따른 분기 처리 로직 개선
-              if result_data is None:  # Case 1: 파싱 실패 -> 이 게시물만 건너뜀
-                break  # 재시도 루프 탈출 후 다음 link로 이동
-
-              if result_data == "STOP":  # Case 2: 시간 초과 -> 이 갤러리 스크래핑 중단
-                stop_gallery_scraping = True
-                break
-
-              # Case 3: 성공
-              location_info = await extract_location_data_with_gpt(
-                  result_data["raw_content"])
-              result_data.update(location_info)
-              result_data["crawled_at"] = datetime.now().isoformat()
-              final_results.append(result_data)
+            if result_data is None:
+              continue
+            if result_data == "STOP":
+              stop_gallery_scraping = True
               break
 
-            except httpx.RequestError as e:
-              if attempt < MAX_RETRIES - 1:
-                print(
-                  f"  [경고] '{link}' 요청 실패 ({repr(e)}). {RETRY_DELAY}초 후 재시도합니다... ({attempt + 1}/{MAX_RETRIES})")
-                await asyncio.sleep(RETRY_DELAY)
-              else:
-                print(f"  [오류] '{link}' 게시물을 가져오는 데 최종 실패했습니다: {repr(e)}")
+            candidate_posts.append(result_data)
 
-          if stop_gallery_scraping:
-            print(
-              f"  [정보] 시간 범위({crawl_hours}시간)를 벗어난 게시물에 도달하여 {gallery_name} 스크래핑을 중단합니다.")
-            break
+          except httpx.RequestError as e:
+            print(f"  [경고] '{link}' 게시물 수집 중 오류: {repr(e)}")
+
+        if stop_gallery_scraping:
+          print(f"  [정보] 시간 범위를 벗어난 게시물에 도달하여 {gallery_name} 수집을 중단합니다.")
 
       except httpx.RequestError as e:
         print(f"  [오류] {gallery_name} 목록을 가져오는 중 오류 발생: {repr(e)}")
 
-  print(f"[DEBUG] 스크래핑 완료. 결과를 시간순으로 정렬합니다...")
-  final_results.sort(key=lambda x: x.get('post_time', datetime.min),
-                     reverse=True)
+  # 2단계: 수집된 모든 후보 게시물을 최신순으로 정렬
+  print(f"[DEBUG] 총 {len(candidate_posts)}개의 후보 게시물 수집 완료. 시간순으로 정렬합니다...")
+  candidate_posts.sort(key=lambda x: x.get('post_time', datetime.min),
+                       reverse=True)
 
-  for result in final_results:
-    result.pop('post_time', None)
+  # 3단계: 수집된 모든 게시물을 동시에 분석 요청 (최대 효율)
+  print(
+    f"[DEBUG] 분석할 최신 게시물 {len(candidate_posts)}개를 선택했습니다. GPT 동시 분석을 시작합니다...")
+  if not candidate_posts:
+    print("[DEBUG] 분석할 게시물이 없어 종료합니다.")
+    return []
 
-  print(f"[DEBUG] 정렬 완료. 총 {len(final_results)}개의 유효한 게시물 발견.")
+  tasks = [extract_location_data_with_gpt(post["raw_content"]) for post in
+           candidate_posts]
+  location_results = await asyncio.gather(*tasks)
+
+  # 4단계: 분석 결과를 원본 데이터와 합쳐 최종 결과 리스트 생성
+  final_results = []
+  for i, post in enumerate(candidate_posts):
+    location_info = location_results[i]
+    post.update(location_info)
+    post.pop('post_time', None)
+    post["crawled_at"] = datetime.now().isoformat()
+    final_results.append(post)
+
+  print(f"[DEBUG] GPT 분석 및 최종 데이터 병합 완료. 총 {len(final_results)}개의 게시물 반환.")
   return final_results
