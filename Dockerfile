@@ -5,27 +5,28 @@
 # =================================================================
 FROM python:3.10-slim AS builder
 
-# 다운로드에 필요한 최소한의 도구만 설치합니다.
+# [수정] 다운로드 스크립트의 안정성을 위해 JSON 파서(jq)를 추가로 설치합니다.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     wget \
     unzip \
+    jq \
     && rm -rf /var/lib/apt/lists/*
 
 # 빌드 환경의 아키텍처를 인자로 받습니다.
 ARG TARGETARCH
 
-# 아키텍처에 따라 다른 URL에서 크롬과 크롬 드라이버를 다운로드하고 압축을 해제합니다.
-RUN CHROME_VERSION=$(wget -q -O - https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | grep -oP '"linux64":.*?"version": "\K[^"]+') && \
+# [수정] 불안정한 grep 대신, 표준 JSON 파서인 jq를 사용하여 다운로드 URL을 안정적으로 추출합니다.
+RUN JSON_URL="https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" && \
     if [ "$TARGETARCH" = "arm64" ]; then \
-        CHROME_URL=$(wget -q -O - https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | grep -oP '"chrome", "platform": "linux-arm64", "url": "\K[^"]+'); \
-        DRIVER_URL=$(wget -q -O - https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | grep -oP '"chromedriver", "platform": "linux-arm64", "url": "\K[^"]+'); \
+        PLATFORM="linux-arm64"; \
     else \
-        CHROME_URL=$(wget -q -O - https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | grep -oP '"chrome", "platform": "linux64", "url": "\K[^"]+'); \
-        DRIVER_URL=$(wget -q -O - https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | grep -oP '"chromedriver", "platform": "linux64", "url": "\K[^"]+'); \
+        PLATFORM="linux64"; \
     fi && \
-    wget -O chrome.zip $CHROME_URL && \
-    wget -O chromedriver.zip $DRIVER_URL && \
+    CHROME_URL=$(wget -qO- $JSON_URL | jq -r ".channels.Stable.downloads.chrome[] | select(.platform==\"$PLATFORM\") | .url") && \
+    DRIVER_URL=$(wget -qO- $JSON_URL | jq -r ".channels.Stable.downloads.chromedriver[] | select(.platform==\"$PLATFORM\") | .url") && \
+    wget -O chrome.zip "$CHROME_URL" && \
+    wget -O chromedriver.zip "$DRIVER_URL" && \
     unzip chrome.zip && \
     unzip chromedriver.zip
 
@@ -37,8 +38,7 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# [수정] 헤드리스 크롬 실행에 필요한 라이브러리 목록을 최신화하고,
-# 더 이상 사용되지 않는 'libgconf-2-4'를 제거했습니다.
+# 헤드리스 크롬 실행에 필요한 최소한의 라이브러리 목록입니다.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     libnss3 \
