@@ -1,16 +1,41 @@
+# app/services/fmkorea_scraping.py
+
 from datetime import datetime, timedelta
-import httpx
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import WebDriverException
 
 from app.core.configs.fmkorea_config import fmkorea_settings
 from app.services.scraping_processor import process_and_analyze_posts
 
 
+def _create_driver():
+  """Docker 환경에서 실행 가능한 Selenium WebDriver 객체를 생성합니다."""
+  chrome_options = Options()
+  chrome_options.add_argument("--headless")
+  chrome_options.add_argument("--no-sandbox")
+  chrome_options.add_argument("--disable-dev-shm-usage")
+  chrome_options.add_argument("--disable-gpu")
+  chrome_options.add_argument(
+    "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
+
+  try:
+    # [수정] Dockerfile에서 시스템 경로에 드라이버를 설치했으므로,
+    # 더 이상 executable_path를 직접 지정할 필요가 없습니다. Selenium이 자동으로 찾습니다.
+    driver = webdriver.Chrome(options=chrome_options)
+    return driver
+  except WebDriverException as e:
+    print(f"  [오류] Selenium WebDriver 생성 실패: {e}")
+    return None
+
+
 def _parse_fmkorea_time(time_str: str) -> datetime:
   try:
     if ":" in time_str and "." not in time_str:
-      today_str = datetime.now().strftime("%Y.%m.%d")
-      return datetime.strptime(f"{today_str} {time_str}", "%Y.%m.%d %H:%M")
+      return datetime.strptime(
+        f"{datetime.now().strftime('%Y.%m.%d')} {time_str}", "%Y.%m.%d %H:%M")
     elif "." in time_str and ":" not in time_str:
       return datetime.strptime(time_str, "%Y.%m.%d")
     else:
@@ -33,73 +58,51 @@ def _scrape_fmkorea_details(page_source: str, time_cutoff: datetime,
     title = soup.select_one(fmkorea_settings.TITLE_SELECTOR).text.strip()
     content = soup.select_one(fmkorea_settings.CONTENT_SELECTOR).text.strip()
 
-    return {
-      "source_community": source_community,
-      "source_url": current_url,
-      "raw_content": f"{title}\n\n{content}",
-      "post_time": post_time
-    }
+    return {"source_community": source_community, "source_url": current_url,
+            "raw_content": f"{title}\n\n{content}", "post_time": post_time}
   except Exception as e:
     print(f"  [오류] Fmkorea 파싱 중 오류: {e}")
     return None
 
 
-async def run_fmkorea_scraper(crawl_hours: int):
+def run_fmkorea_scraper(crawl_hours: int):
   time_cutoff = datetime.now() - timedelta(hours=crawl_hours)
   candidate_posts = []
-  headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-    'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-    'Referer': fmkorea_settings.BASE_URL  # 요청의 출처를 명시하여 정상적인 접근처럼 보이게 합니다.
-  }
+  driver = _create_driver()
 
-  async with httpx.AsyncClient(headers=headers, timeout=30.0,
-                               follow_redirects=True) as aclient:
+  if not driver:
+    return []
+
+  try:
     for board in fmkorea_settings.BOARDS_TO_SCRAPE:
-      board_id = board["id"]
-      board_name = board["name"]
-      category_id = board.get("category")
-      order_type = board.get("order_type")
-
+      board_id, board_name, category_id, order_type = board["id"], board[
+        "name"], board.get("category"), board.get("order_type")
       list_url = f"{fmkorea_settings.BASE_URL}/index.php?mid={board_id}"
-      if category_id:
-        list_url += f"&category={category_id}"
-      if order_type:
-        list_url += f"&order_type={order_type}"
+      if category_id: list_url += f"&category={category_id}"
+      if order_type: list_url += f"&order_type={order_type}"
 
       print(f"--- [ 에펨코리아 - {board_name} ] 게시물 수집 중 (URL: {list_url}) ---")
-      stop_board_scraping = False
+      driver.get(list_url)
 
-      try:
-        list_response = await aclient.get(list_url)
-        list_response.raise_for_status()
-        soup = BeautifulSoup(list_response.text, 'html.parser')
-        post_links = [fmkorea_settings.BASE_URL + tag['href'] for tag in
-                      soup.select(fmkorea_settings.POST_LINK_SELECTOR)]
+      soup = BeautifulSoup(driver.page_source, 'html.parser')
+      post_links = [fmkorea_settings.BASE_URL + tag['href'] for tag in
+                    soup.select(fmkorea_settings.POST_LINK_SELECTOR)]
 
-        for link in post_links:
-          try:
-            post_response = await aclient.get(link)
-            post_response.raise_for_status()
-            result_data = _scrape_fmkorea_details(post_response.text,
-                                                  time_cutoff,
-                                                  f"fmkorea_{board_id}", link)
+      for link in post_links:
+        try:
+          driver.get(link)
+          result_data = _scrape_fmkorea_details(driver.page_source, time_cutoff,
+                                                f"fmkorea_{board_id}", link)
 
-            if result_data is None: continue
-            if result_data == "STOP":
-              stop_board_scraping = True
-              break
+          if result_data is None: continue
+          if result_data == "STOP":
+            print(f"  [정보] 시간 범위를 벗어난 게시물에 도달하여 {board_name} 수집을 중단합니다.")
+            break
+          candidate_posts.append(result_data)
+        except Exception as e:
+          print(f"  [경고] '{link}' 게시물 수집 중 오류: {e}")
+  finally:
+    driver.quit()
 
-            candidate_posts.append(result_data)
-
-          except httpx.RequestError as e:
-            print(f"  [경고] '{link}' 게시물 수집 중 오류: {repr(e)}")
-
-        if stop_board_scraping:
-          print(f"  [정보] 시간 범위를 벗어난 게시물에 도달하여 {board_name} 수집을 중단합니다.")
-
-      except httpx.RequestError as e:
-        print(f"  [오류] {board_name} 목록을 가져오는 중 오류 발생: {repr(e)}")
-
-  return await process_and_analyze_posts(candidate_posts)
+  import asyncio
+  return asyncio.run(process_and_analyze_posts(candidate_posts))
