@@ -12,7 +12,7 @@ class Settings(BaseModel):
   OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY")
 
   # [수정] Database connection
-  DB_HOST: str = os.getenv("DB_HOST", "localhost")
+  DB_HOST: str = os.getenv("DB_HOST", "mysql")
   DB_USER: str = os.getenv("DB_USER", "admin")
   DB_PASSWORD: str = os.getenv("DB_PASSWORD", "00000000")
   DB_NAME: str = os.getenv("DB_NAME", "yogi-josim")
