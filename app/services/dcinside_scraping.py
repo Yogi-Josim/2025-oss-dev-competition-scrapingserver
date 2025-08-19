@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta
 import httpx
 from bs4 import BeautifulSoup
@@ -22,7 +23,6 @@ def _scrape_dcinside_details(
 ):
   try:
     soup = BeautifulSoup(page_source, 'html.parser')
-    # [수정] 설정 객체 사용 방식 변경
     time_element = soup.select_one(settings.dcinside.TIME_SELECTOR)
     post_time_str = time_element.get('title') if time_element else ''
     post_time = _parse_dcinside_time(post_time_str)
@@ -53,7 +53,6 @@ async def run_dcinside_scraper(crawl_hours: int, crawl_minutes: int,
 
   async with httpx.AsyncClient(headers=headers, timeout=30.0,
                                follow_redirects=True) as aclient:
-    # [수정] 설정 객체 사용 방식 변경
     for gallery in settings.dcinside.GALLERIES_TO_SCRAPE:
       gallery_id, gallery_name = gallery["id"], gallery["name"]
       list_url = f"{settings.dcinside.BASE_URL}/board/lists/?id={gallery_id}&exception_mode=recommend"
