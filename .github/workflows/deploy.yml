@@ -66,8 +66,8 @@ jobs:
             set -e
             cd ~/docker/
             export OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-            docker pull ${{ secrets.DOCKER_USERNAME }}/yogi-josim-fastapi-scraper:latest
-            docker compose -f docker-compose-scraper.yml up -d
+            docker compose -f docker-compose.yml pull scraper-api
+            docker compose -f docker-compose.yml up -d scraper-api
             docker image prune -af
 
   check:
