@@ -55,7 +55,7 @@ JSON: {"region": "서울시 종로구", "place_name": "서울대학교병원", "
   for attempt in range(max_retries):
     try:
       response = await client.chat.completions.create(
-          model="gpt-5-mini",
+          model="gpt-5-nano",
           messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": content},
